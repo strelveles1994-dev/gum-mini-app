@@ -1,33 +1,17 @@
-﻿import { useEffect, useMemo, useState, type FormEvent } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-
-type WorkoutType = "Strength" | "Cardio" | "Mobility" | "Recovery";
-
-type Workout = {
-  id: string;
-  type: WorkoutType;
-  minutes: number;
-  intensity: number;
-  note: string;
-  createdAt: string;
-};
 
 type TgUser = {
   id?: number;
   first_name?: string;
-  last_name?: string;
-  username?: string;
   language_code?: string;
 };
 
 type TgWebApp = {
   ready: () => void;
   expand: () => void;
-  initData?: string;
-  initDataUnsafe?: { user?: TgUser };
   colorScheme?: "light" | "dark";
-  platform?: string;
-  version?: string;
+  initDataUnsafe?: { user?: TgUser };
   HapticFeedback?: {
     impactOccurred?: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
   };
@@ -39,27 +23,42 @@ declare global {
   }
 }
 
-const STORAGE_KEY = "gym-check-workouts-v1";
-const GOAL_KEY = "gym-check-weekly-goal-v1";
-const DEFAULT_GOAL = 4;
-
-const workoutLabels: Record<WorkoutType, string> = {
-  Strength: "Силовая",
-  Cardio: "Кардио",
-  Mobility: "Мобильность",
-  Recovery: "Восстановление",
-};
-
-type ExerciseCategory = {
+type ExerciseGroup = {
   id: string;
   title: string;
+  icon: string;
   exercises: string[];
 };
 
-const exerciseCatalog: ExerciseCategory[] = [
+type WorkoutSet = {
+  id: string;
+  weight: string;
+  reps: string;
+};
+
+type SessionExercise = {
+  id: string;
+  name: string;
+  groupId: string;
+  expanded: boolean;
+  sets: WorkoutSet[];
+};
+
+type DayChip = {
+  key: string;
+  label: string;
+  day: number;
+  fullLabel: string;
+  isToday: boolean;
+};
+
+const STORAGE_KEY = "gym-check-session-v3";
+
+const exerciseGroups: ExerciseGroup[] = [
   {
     id: "legs",
     title: "Ноги и ягодицы",
+    icon: "🦵",
     exercises: [
       "Приседания",
       "Выпады",
@@ -71,6 +70,7 @@ const exerciseCatalog: ExerciseCategory[] = [
   {
     id: "shoulders",
     title: "Плечи",
+    icon: "💪",
     exercises: [
       "Жим в плечевом тренажере",
       "Жим гантелей сидя",
@@ -82,6 +82,7 @@ const exerciseCatalog: ExerciseCategory[] = [
   {
     id: "back",
     title: "Спина",
+    icon: "🪽",
     exercises: [
       "Тяга верхнего блока",
       "Тяга горизонтального блока",
@@ -93,6 +94,7 @@ const exerciseCatalog: ExerciseCategory[] = [
   {
     id: "chest",
     title: "Грудь",
+    icon: "🏋️",
     exercises: [
       "Жим лежа",
       "Отжимания на брусьях",
@@ -104,6 +106,7 @@ const exerciseCatalog: ExerciseCategory[] = [
   {
     id: "triceps",
     title: "Трицепс",
+    icon: "🔥",
     exercises: [
       "Разгибания рук в блоке",
       "Разгибание рук с гантелями на трицепс",
@@ -114,18 +117,94 @@ const exerciseCatalog: ExerciseCategory[] = [
   },
 ];
 
-const defaultForm = {
-  type: "Strength" as WorkoutType,
-  minutes: "45",
-  intensity: 3,
-  note: "",
-};
-
-function isWorkoutType(value: unknown): value is WorkoutType {
-  return value === "Strength" || value === "Cardio" || value === "Mobility" || value === "Recovery";
+function createId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 }
 
-function dayKey(date: Date): string {
+function sanitizeNumber(value: unknown, maxDigits: number): string {
+  return String(value ?? "")
+    .replace(/[^\d]/g, "")
+    .slice(0, maxDigits);
+}
+
+function createSet(weight = "", reps = ""): WorkoutSet {
+  return {
+    id: createId(),
+    weight: sanitizeNumber(weight, 3),
+    reps: sanitizeNumber(reps, 2),
+  };
+}
+
+type CreateExerciseOptions = {
+  sets?: WorkoutSet[];
+  expanded?: boolean;
+};
+
+function createExercise(name: string, groupId: string, options: CreateExerciseOptions = {}): SessionExercise {
+  return {
+    id: createId(),
+    name,
+    groupId,
+    expanded: options.expanded ?? false,
+    sets: options.sets && options.sets.length > 0 ? options.sets : [createSet()],
+  };
+}
+
+function buildDefaultSession(): SessionExercise[] {
+  return [
+    createExercise("Приседания", "legs", {
+      expanded: true,
+      sets: [createSet("40", "12"), createSet("45", "10"), createSet("45", "10")],
+    }),
+    createExercise("Жим лежа", "chest", { sets: [createSet("30", "12"), createSet("35", "10")] }),
+    createExercise("Тяга верхнего блока", "back", { sets: [createSet("35", "12")] }),
+    createExercise("Французский жим", "triceps", { sets: [createSet("18", "12")] }),
+  ];
+}
+
+function loadSession(): SessionExercise[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return buildDefaultSession();
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return buildDefaultSession();
+
+    const normalized = parsed.map((item) => {
+      const groupId =
+        typeof item?.groupId === "string" && exerciseGroups.some((group) => group.id === item.groupId)
+          ? item.groupId
+          : exerciseGroups[0].id;
+
+      const setItems = Array.isArray(item?.sets)
+        ? item.sets.map((setItem: { weight?: unknown; reps?: unknown }) =>
+            createSet(
+              typeof setItem?.weight === "string" ? setItem.weight : String(setItem?.weight ?? ""),
+              typeof setItem?.reps === "string" ? setItem.reps : String(setItem?.reps ?? ""),
+            ),
+          )
+        : [];
+
+      return createExercise(
+        typeof item?.name === "string" && item.name.trim().length > 0 ? item.name.trim().slice(0, 80) : "Упражнение",
+        groupId,
+        {
+          expanded: Boolean(item?.expanded),
+          sets: setItems.length > 0 ? setItems : [createSet()],
+        },
+      );
+    });
+
+    return normalized.length > 0 ? normalized : buildDefaultSession();
+  } catch {
+    return buildDefaultSession();
+  }
+}
+
+function formatDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -140,108 +219,61 @@ function getWeekStart(date: Date): Date {
   return start;
 }
 
-function createId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+function buildWeekDays(locale: string): DayChip[] {
+  const start = getWeekStart(new Date());
+  const labelFormatter = new Intl.DateTimeFormat(locale, { weekday: "short" });
+  const fullFormatter = new Intl.DateTimeFormat(locale, { weekday: "long", day: "2-digit", month: "long" });
+  const todayKey = formatDateKey(new Date());
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+
+    return {
+      key: formatDateKey(date),
+      label: labelFormatter.format(date).replace(".", "").toUpperCase(),
+      day: date.getDate(),
+      fullLabel: fullFormatter.format(date),
+      isToday: formatDateKey(date) === todayKey,
+    };
+  });
 }
 
-function loadWorkouts(): Workout[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .map((item) => {
-        const minutes = Number(item?.minutes);
-        const intensity = Number(item?.intensity);
-
-        return {
-          id: typeof item?.id === "string" ? item.id : createId(),
-          type: isWorkoutType(item?.type) ? item.type : "Strength",
-          minutes: Number.isFinite(minutes) ? Math.max(1, Math.trunc(minutes)) : 0,
-          intensity: Number.isFinite(intensity) ? Math.min(5, Math.max(1, Math.trunc(intensity))) : 3,
-          note: typeof item?.note === "string" ? item.note.trim().slice(0, 120) : "",
-          createdAt: typeof item?.createdAt === "string" ? item.createdAt : new Date().toISOString(),
-        } as Workout;
-      })
-      .filter((item) => item.minutes > 0 && !Number.isNaN(Date.parse(item.createdAt)))
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  } catch {
-    return [];
-  }
-}
-
-function loadGoal(): number {
-  try {
-    const raw = localStorage.getItem(GOAL_KEY);
-    const value = Number(raw);
-    if (!Number.isFinite(value)) return DEFAULT_GOAL;
-    return Math.min(10, Math.max(1, Math.trunc(value)));
-  } catch {
-    return DEFAULT_GOAL;
-  }
-}
-
-function getStreakDays(workouts: Workout[]): number {
-  const days = new Set(workouts.map((item) => dayKey(new Date(item.createdAt))));
-  const pointer = new Date();
-  pointer.setHours(0, 0, 0, 0);
-
-  let streak = 0;
-  while (days.has(dayKey(pointer))) {
-    streak += 1;
-    pointer.setDate(pointer.getDate() - 1);
-  }
-  return streak;
-}
-
-function formatWorkoutDate(isoDate: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(isoDate));
+function findGroup(groupId: string): ExerciseGroup {
+  return exerciseGroups.find((group) => group.id === groupId) ?? exerciseGroups[0];
 }
 
 export default function App() {
   const tg = useMemo(() => window.Telegram?.WebApp, []);
-  const [workouts, setWorkouts] = useState<Workout[]>(() => loadWorkouts());
-  const [goal, setGoal] = useState<number>(() => loadGoal());
-  const [form, setForm] = useState(defaultForm);
-  const [status, setStatus] = useState("");
-  const [activeCategoryId, setActiveCategoryId] = useState(exerciseCatalog[0].id);
+  const locale = tg?.initDataUnsafe?.user?.language_code || "ru-RU";
+  const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "спортсмен";
+
+  const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>(() => loadSession());
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => (new Date().getDay() + 6) % 7);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [activeGroupId, setActiveGroupId] = useState(exerciseGroups[0].id);
+  const [notice, setNotice] = useState("");
 
   const isDark = tg?.colorScheme === "dark";
-  const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "Спортсмен";
-  const locale = tg?.initDataUnsafe?.user?.language_code || "ru-RU";
 
-  const weekStart = useMemo(() => getWeekStart(new Date()), []);
-
-  const workoutsThisWeek = useMemo(
-    () => workouts.filter((item) => new Date(item.createdAt) >= weekStart).length,
-    [workouts, weekStart],
+  const weekDays = useMemo(() => buildWeekDays(locale), [locale]);
+  const selectedDay = weekDays[selectedDayIndex] ?? weekDays[0];
+  const activeGroup = useMemo(
+    () => exerciseGroups.find((group) => group.id === activeGroupId) ?? exerciseGroups[0],
+    [activeGroupId],
   );
 
-  const minutesThisWeek = useMemo(
-    () => workouts
-      .filter((item) => new Date(item.createdAt) >= weekStart)
-      .reduce((sum, item) => sum + item.minutes, 0),
-    [workouts, weekStart],
+  const legsPlanCount = useMemo(
+    () => sessionExercises.filter((exercise) => exercise.groupId === "legs").reduce((sum, exercise) => sum + exercise.sets.length, 0),
+    [sessionExercises],
   );
 
-  const streakDays = useMemo(() => getStreakDays(workouts), [workouts]);
-  const progress = Math.min(100, Math.round((workoutsThisWeek / goal) * 100));
-  const leftToGoal = Math.max(0, goal - workoutsThisWeek);
-  const recentWorkouts = workouts.slice(0, 6);
-  const activeCategory = useMemo(
-    () => exerciseCatalog.find((category) => category.id === activeCategoryId) ?? exerciseCatalog[0],
-    [activeCategoryId],
+  const upperPlanCount = useMemo(
+    () =>
+      sessionExercises
+        .filter((exercise) => ["shoulders", "back", "chest", "triceps"].includes(exercise.groupId))
+        .reduce((sum, exercise) => sum + exercise.sets.length, 0),
+    [sessionExercises],
   );
 
   useEffect(() => {
@@ -250,250 +282,264 @@ export default function App() {
   }, [tg]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts));
-  }, [workouts]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionExercises));
+  }, [sessionExercises]);
 
   useEffect(() => {
-    localStorage.setItem(GOAL_KEY, String(goal));
-  }, [goal]);
-
-  useEffect(() => {
-    if (!status) return;
-    const timerId = setTimeout(() => setStatus(""), 2500);
+    if (!notice) return;
+    const timerId = setTimeout(() => setNotice(""), 2000);
     return () => clearTimeout(timerId);
-  }, [status]);
+  }, [notice]);
 
-  function addWorkout(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const minutes = Number(form.minutes);
-    if (!Number.isFinite(minutes) || minutes < 5 || minutes > 300) {
-      setStatus("Укажи длительность от 5 до 300 минут.");
-      return;
-    }
-
-    const item: Workout = {
-      id: createId(),
-      type: form.type,
-      minutes: Math.round(minutes),
-      intensity: form.intensity,
-      note: form.note.trim().slice(0, 120),
-      createdAt: new Date().toISOString(),
-    };
-
-    setWorkouts((prev) => [item, ...prev]);
-    setForm((prev) => ({ ...prev, minutes: "45", note: "" }));
-    setStatus("Тренировка сохранена.");
-    tg?.HapticFeedback?.impactOccurred?.("medium");
+  function toggleExercise(exerciseId: string) {
+    setSessionExercises((prev) =>
+      prev.map((exercise) =>
+        exercise.id === exerciseId ? { ...exercise, expanded: !exercise.expanded } : exercise,
+      ),
+    );
   }
 
-  function deleteWorkout(id: string) {
-    setWorkouts((prev) => prev.filter((item) => item.id !== id));
+  function updateSetValue(exerciseId: string, setId: string, field: "weight" | "reps", value: string) {
+    const sanitized = sanitizeNumber(value, field === "weight" ? 3 : 2);
+
+    setSessionExercises((prev) =>
+      prev.map((exercise) => {
+        if (exercise.id !== exerciseId) return exercise;
+
+        return {
+          ...exercise,
+          sets: exercise.sets.map((setItem) =>
+            setItem.id === setId ? { ...setItem, [field]: sanitized } : setItem,
+          ),
+        };
+      }),
+    );
   }
 
-  function addExerciseToNote(exercise: string) {
-    setForm((prev) => {
-      const nextNote = prev.note.trim() ? `${exercise}; ${prev.note.trim()}` : exercise;
-      return { ...prev, note: nextNote.slice(0, 120) };
-    });
-    setStatus(`Добавлено в заметки: ${exercise}`);
+  function addSet(exerciseId: string) {
+    setSessionExercises((prev) =>
+      prev.map((exercise) => {
+        if (exercise.id !== exerciseId) return exercise;
+
+        const lastSet = exercise.sets[exercise.sets.length - 1];
+
+        return {
+          ...exercise,
+          expanded: true,
+          sets: [...exercise.sets, createSet(lastSet?.weight ?? "", lastSet?.reps ?? "")],
+        };
+      }),
+    );
+
+    setNotice("Подход добавлен");
     tg?.HapticFeedback?.impactOccurred?.("light");
   }
 
-  const todayLabel = new Intl.DateTimeFormat(locale, {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-  }).format(new Date());
+  function removeExercise(exerciseId: string) {
+    setSessionExercises((prev) => prev.filter((exercise) => exercise.id !== exerciseId));
+    setNotice("Упражнение удалено");
+    tg?.HapticFeedback?.impactOccurred?.("light");
+  }
+
+  function addExerciseToSession(name: string, groupId: string) {
+    let duplicate = false;
+
+    setSessionExercises((prev) => {
+      const exists = prev.some((exercise) => exercise.name.toLowerCase() === name.toLowerCase());
+      if (exists) {
+        duplicate = true;
+        return prev.map((exercise) =>
+          exercise.name.toLowerCase() === name.toLowerCase() ? { ...exercise, expanded: true } : exercise,
+        );
+      }
+
+      return [...prev, createExercise(name, groupId, { expanded: true })];
+    });
+
+    if (duplicate) {
+      setNotice("Это упражнение уже есть в списке");
+      tg?.HapticFeedback?.impactOccurred?.("light");
+      return;
+    }
+
+    setSheetOpen(false);
+    setNotice(`Добавлено: ${name}`);
+    tg?.HapticFeedback?.impactOccurred?.("medium");
+  }
 
   return (
     <div className={`app-shell ${isDark ? "theme-dark" : "theme-light"}`}>
-      <main className="app-main">
-        <section className="card hero reveal r1">
-          <p className="eyebrow">Gym Check</p>
-          <h1>
-            С возвращением, <span>{userName}</span>
-          </h1>
-          <p className="hero-text">Отмечай тренировки и держи ритм каждую неделю.</p>
-          <div className="hero-meta">
-            <span>{todayLabel}</span>
-            <span>{tg?.platform ? `${tg.platform} • v${tg.version ?? "?"}` : "Предпросмотр в браузере"}</span>
+      <main className="workout-app">
+        <header className="top-row">
+          <div>
+            <p className="app-title">Тренировки</p>
+            <p className="app-subtitle">Сегодня для тебя, {userName}</p>
           </div>
-        </section>
+          <button className="avatar-btn" type="button" aria-label="Профиль">
+            👤
+          </button>
+        </header>
 
-        <section className="stats-grid reveal r2">
-          <article className="card stat-card">
-            <p className="stat-label">Эта неделя</p>
-            <p className="stat-value">{workoutsThisWeek}</p>
-            <p className="stat-caption">тренировок</p>
-          </article>
-
-          <article className="card stat-card">
-            <p className="stat-label">Серия</p>
-            <p className="stat-value">{streakDays}</p>
-            <p className="stat-caption">дней подряд</p>
-          </article>
-
-          <article className="card stat-card">
-            <p className="stat-label">Минуты</p>
-            <p className="stat-value">{minutesThisWeek}</p>
-            <p className="stat-caption">за неделю</p>
-          </article>
-        </section>
-
-        <section className="card reveal r3">
-          <div className="section-head">
-            <h2>Добавить тренировку</h2>
-            <p>{status || "Запиши тренировку меньше чем за 10 секунд."}</p>
-          </div>
-
-          <form className="workout-form" onSubmit={addWorkout}>
-            <label className="field">
-              <span>Тип</span>
-              <select
-                value={form.type}
-                onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value as WorkoutType }))}
-              >
-                {Object.entries(workoutLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span>Минуты</span>
-              <input
-                type="number"
-                min={5}
-                max={300}
-                value={form.minutes}
-                onChange={(event) => setForm((prev) => ({ ...prev, minutes: event.target.value }))}
-                placeholder="45"
-              />
-            </label>
-
-            <label className="field field-intensity">
-              <span>Интенсивность: {form.intensity}/5</span>
-              <input
-                type="range"
-                min={1}
-                max={5}
-                value={form.intensity}
-                onChange={(event) => setForm((prev) => ({ ...prev, intensity: Number(event.target.value) }))}
-              />
-            </label>
-
-            <label className="field field-note">
-              <span>Заметки (необязательно)</span>
-              <input
-                type="text"
-                value={form.note}
-                maxLength={120}
-                onChange={(event) => setForm((prev) => ({ ...prev, note: event.target.value }))}
-                placeholder="День ног, попытки PR, легкий бег..."
-              />
-            </label>
-
-            <button className="primary-btn" type="submit">
-              Сохранить тренировку
+        <section className="week-strip" aria-label="Календарь недели">
+          {weekDays.map((day, index) => (
+            <button
+              key={day.key}
+              type="button"
+              className={`day-chip ${selectedDayIndex === index ? "is-active" : ""} ${day.isToday ? "is-today" : ""}`}
+              onClick={() => setSelectedDayIndex(index)}
+            >
+              <span className="day-label">{day.label}</span>
+              <span className="day-number">{day.day}</span>
             </button>
-          </form>
+          ))}
         </section>
 
-        <section className="card reveal r4">
-          <div className="section-head compact">
-            <h2>Каталог упражнений</h2>
-            <p>Выбери группу мышц и добавь упражнение в заметки одним нажатием.</p>
-          </div>
+        <p className="selected-day">План на {selectedDay.fullLabel}</p>
 
-          <div className="catalog-tabs" role="tablist" aria-label="Группы мышц">
-            {exerciseCatalog.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                className={`catalog-tab ${category.id === activeCategory.id ? "is-active" : ""}`}
-                onClick={() => setActiveCategoryId(category.id)}
-                aria-pressed={category.id === activeCategory.id}
-              >
-                {category.title}
-              </button>
-            ))}
-          </div>
+        <section className="program-stack" aria-label="Блоки тренировок">
+          <article className="program-card legs">
+            <div>
+              <p className="program-name">День ног</p>
+              <p className="program-note">Силовой фокус: ягодицы, квадрицепс, задняя цепь</p>
+            </div>
+            <span className="program-count">{Math.max(legsPlanCount, 1)}</span>
+          </article>
 
-          <ul className="exercise-list">
-            {activeCategory.exercises.map((exercise) => (
-              <li key={exercise} className="exercise-item">
-                <span className="exercise-name">{exercise}</span>
-                <button className="exercise-add-btn" type="button" onClick={() => addExerciseToNote(exercise)}>
-                  В заметки
-                </button>
-              </li>
-            ))}
-          </ul>
+          <article className="program-card upper">
+            <div>
+              <p className="program-name">Верх тела</p>
+              <p className="program-note">Плечи, спина, грудь и трицепс</p>
+            </div>
+            <span className="program-count">{Math.max(upperPlanCount, 1)}</span>
+          </article>
         </section>
 
-        <section className="card reveal r5">
-          <div className="section-head compact">
-            <h2>Цель на неделю</h2>
-            <p>{workoutsThisWeek >= goal ? "Цель выполнена. Отличная работа." : `До цели осталось: ${leftToGoal}.`}</p>
-          </div>
+        {notice ? <p className="inline-notice">{notice}</p> : null}
 
-          <label className="goal-label" htmlFor="goal-range">
-            Цель: <strong>{goal}</strong> тренировок
-          </label>
-          <input
-            id="goal-range"
-            className="goal-range"
-            type="range"
-            min={1}
-            max={10}
-            value={goal}
-            onChange={(event) => setGoal(Number(event.target.value))}
-          />
-
-          <div className="progress-track" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-          <p className="progress-text">{progress}% выполнено за неделю</p>
-        </section>
-
-        <section className="card reveal r6">
-          <div className="section-head compact">
-            <h2>Последние тренировки</h2>
-            <p>{recentWorkouts.length ? "Недавние сессии" : "Пока нет тренировок"}</p>
-          </div>
-
-          {recentWorkouts.length === 0 ? (
-            <p className="empty-state">Начни с первой тренировки выше.</p>
+        <section className="exercise-board" aria-label="Упражнения">
+          {sessionExercises.length === 0 ? (
+            <p className="exercise-empty">Добавь первое упражнение кнопкой внизу.</p>
           ) : (
-            <ul className="history-list">
-              {recentWorkouts.map((item) => (
-                <li key={item.id} className="history-item">
-                  <div className="history-copy">
-                    <p className="history-title">
-                      {workoutLabels[item.type]} • {item.minutes} мин • Интенсивность {item.intensity}/5
-                    </p>
-                    <p className="history-meta">
-                      {formatWorkoutDate(item.createdAt, locale)}
-                      {item.note ? ` • ${item.note}` : ""}
-                    </p>
-                  </div>
+            sessionExercises.map((exercise) => {
+              const group = findGroup(exercise.groupId);
 
-                  <button className="ghost-btn" type="button" onClick={() => deleteWorkout(item.id)}>
-                    Удалить
+              return (
+                <article key={exercise.id} className={`exercise-card ${exercise.expanded ? "expanded" : ""}`}>
+                  <button
+                    type="button"
+                    className="exercise-head"
+                    onClick={() => toggleExercise(exercise.id)}
+                    aria-expanded={exercise.expanded}
+                  >
+                    <span className="exercise-icon" aria-hidden="true">
+                      {group.icon}
+                    </span>
+                    <span className="exercise-text">
+                      <strong>{exercise.name}</strong>
+                      <small>{group.title}</small>
+                    </span>
+                    <span className="exercise-chevron" aria-hidden="true">
+                      ▾
+                    </span>
+                  </button>
+
+                  {exercise.expanded ? (
+                    <div className="set-panel">
+                      <div className="set-head">
+                        <span>№</span>
+                        <span>вес (кг)</span>
+                        <span>повт.</span>
+                      </div>
+
+                      {exercise.sets.map((setItem, index) => (
+                        <div key={setItem.id} className="set-row">
+                          <span className="set-index">{index + 1}</span>
+                          <input
+                            className="set-input"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            placeholder="0"
+                            value={setItem.weight}
+                            onChange={(event) => updateSetValue(exercise.id, setItem.id, "weight", event.target.value)}
+                          />
+                          <input
+                            className="set-input"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            placeholder="0"
+                            value={setItem.reps}
+                            onChange={(event) => updateSetValue(exercise.id, setItem.id, "reps", event.target.value)}
+                          />
+                        </div>
+                      ))}
+
+                      <div className="set-actions">
+                        <button type="button" className="add-set-btn" onClick={() => addSet(exercise.id)}>
+                          Добавить подход
+                        </button>
+                        <button type="button" className="remove-ex-btn" onClick={() => removeExercise(exercise.id)}>
+                          Удалить
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })
+          )}
+        </section>
+
+        <footer className="bottom-dock">
+          <button type="button" className="dock-side-btn" onClick={() => setSheetOpen(true)} aria-label="Открыть каталог">
+            …
+          </button>
+          <button type="button" className="dock-main-btn" onClick={() => setSheetOpen(true)}>
+            Добавить
+          </button>
+        </footer>
+      </main>
+
+      {sheetOpen ? (
+        <div className="sheet-overlay" role="presentation" onClick={() => setSheetOpen(false)}>
+          <aside className="sheet" aria-label="Каталог упражнений" onClick={(event) => event.stopPropagation()}>
+            <div className="sheet-header">
+              <h2>Добавить упражнение</h2>
+              <button type="button" onClick={() => setSheetOpen(false)}>
+                Закрыть
+              </button>
+            </div>
+
+            <div className="sheet-tabs" role="tablist" aria-label="Группы мышц">
+              {exerciseGroups.map((group) => (
+                <button
+                  key={group.id}
+                  type="button"
+                  className={`sheet-tab ${group.id === activeGroup.id ? "is-active" : ""}`}
+                  onClick={() => setActiveGroupId(group.id)}
+                  aria-pressed={group.id === activeGroup.id}
+                >
+                  {group.title}
+                </button>
+              ))}
+            </div>
+
+            <ul className="sheet-list">
+              {activeGroup.exercises.map((exerciseName) => (
+                <li key={exerciseName}>
+                  <button
+                    type="button"
+                    className="sheet-item-btn"
+                    onClick={() => addExerciseToSession(exerciseName, activeGroup.id)}
+                  >
+                    <span>{exerciseName}</span>
+                    <span>＋</span>
                   </button>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
-
-        <footer className="footer-note">
-          {tg?.initData ? "Сессия Telegram подключена" : "Открыто вне Telegram: демо-режим"}
-        </footer>
-      </main>
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }
