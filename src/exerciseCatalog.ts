@@ -10,38 +10,10 @@ export type ExerciseDefinition = {
   image: string;
 };
 
-const FEMALE_IMAGE_POOL_BY_PLAN: Record<BasePlanId, string[]> = {
-  upper: [
-    "https://images.pexels.com/photos/14591551/pexels-photo-14591551.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    "https://images.pexels.com/photos/15549972/pexels-photo-15549972.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    "https://images.pexels.com/photos/1552103/pexels-photo-1552103.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    "https://images.pexels.com/photos/1480520/pexels-photo-1480520.jpeg?auto=compress&cs=tinysrgb&w=1200",
-  ],
-  lower: [
-    "https://images.pexels.com/photos/14599069/pexels-photo-14599069.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    "https://images.pexels.com/photos/12905796/pexels-photo-12905796.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    "https://images.pexels.com/photos/18060236/pexels-photo-18060236.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    "https://images.pexels.com/photos/414029/pexels-photo-414029.jpeg?auto=compress&cs=tinysrgb&w=1200",
-  ],
-  cardio: [
-    "https://images.pexels.com/photos/17898142/pexels-photo-17898142.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    "https://images.pexels.com/photos/18060056/pexels-photo-18060056.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    "https://images.pexels.com/photos/136404/pexels-photo-136404.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    "https://images.pexels.com/photos/1552242/pexels-photo-1552242.jpeg?auto=compress&cs=tinysrgb&w=1200",
-  ],
-};
+const EXERCISE_IMAGE_BASE = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises";
 
-function imageIndexFromId(id: string, poolLength: number): number {
-  let hash = 0;
-  for (let i = 0; i < id.length; i += 1) {
-    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  }
-  return hash % poolLength;
-}
-
-function femaleImageForExercise(plan: BasePlanId, id: string): string {
-  const pool = FEMALE_IMAGE_POOL_BY_PLAN[plan];
-  return pool[imageIndexFromId(id, pool.length)];
+function exerciseImage(id: string): string {
+  return `${EXERCISE_IMAGE_BASE}/${id}/0.jpg`;
 }
 
 export const muscleLabelByKey: Record<string, string> = {
@@ -75,7 +47,7 @@ function makeExercise(input: {
   return {
     ...input,
     secondaryMuscles: input.secondaryMuscles ?? [],
-    image: input.image ?? femaleImageForExercise(input.plan, input.id),
+    image: input.image ?? exerciseImage(input.id),
   };
 }
 
