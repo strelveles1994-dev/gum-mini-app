@@ -27,6 +27,7 @@ type ExerciseGroup = {
   id: string;
   title: string;
   icon: string;
+  coverImage: string;
   exercises: string[];
 };
 
@@ -53,12 +54,21 @@ type DayChip = {
 };
 
 const STORAGE_KEY = "gym-check-session-v3";
+const DEFAULT_REST_SECONDS = 90;
+const PROGRAM_IMAGES = {
+  legs:
+    "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80",
+  upper:
+    "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80",
+};
 
 const exerciseGroups: ExerciseGroup[] = [
   {
     id: "legs",
     title: "Ноги и ягодицы",
     icon: "🦵",
+    coverImage:
+      "https://images.unsplash.com/photo-1434682881908-b43d0467b798?auto=format&fit=crop&w=900&q=80",
     exercises: [
       "Приседания",
       "Выпады",
@@ -71,6 +81,8 @@ const exerciseGroups: ExerciseGroup[] = [
     id: "shoulders",
     title: "Плечи",
     icon: "💪",
+    coverImage:
+      "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&w=900&q=80",
     exercises: [
       "Жим в плечевом тренажере",
       "Жим гантелей сидя",
@@ -83,6 +95,8 @@ const exerciseGroups: ExerciseGroup[] = [
     id: "back",
     title: "Спина",
     icon: "🪽",
+    coverImage:
+      "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=900&q=80",
     exercises: [
       "Тяга верхнего блока",
       "Тяга горизонтального блока",
@@ -95,6 +109,8 @@ const exerciseGroups: ExerciseGroup[] = [
     id: "chest",
     title: "Грудь",
     icon: "🏋️",
+    coverImage:
+      "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=900&q=80",
     exercises: [
       "Жим лежа",
       "Отжимания на брусьях",
@@ -107,6 +123,8 @@ const exerciseGroups: ExerciseGroup[] = [
     id: "triceps",
     title: "Трицепс",
     icon: "🔥",
+    coverImage:
+      "https://images.unsplash.com/photo-1599058917765-a780eda07a3e?auto=format&fit=crop&w=900&q=80",
     exercises: [
       "Разгибания рук в блоке",
       "Разгибание рук с гантелями на трицепс",
@@ -243,6 +261,13 @@ function findGroup(groupId: string): ExerciseGroup {
   return exerciseGroups.find((group) => group.id === groupId) ?? exerciseGroups[0];
 }
 
+function formatSeconds(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 export default function App() {
   const tg = useMemo(() => window.Telegram?.WebApp, []);
   const locale = tg?.initDataUnsafe?.user?.language_code || "ru-RU";
@@ -252,6 +277,8 @@ export default function App() {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => (new Date().getDay() + 6) % 7);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState(exerciseGroups[0].id);
+  const [exerciseSearch, setExerciseSearch] = useState("");
+  const [restSeconds, setRestSeconds] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
 
   const isDark = tg?.colorScheme === "dark";
@@ -262,6 +289,27 @@ export default function App() {
     () => exerciseGroups.find((group) => group.id === activeGroupId) ?? exerciseGroups[0],
     [activeGroupId],
   );
+  const filteredExercises = useMemo(() => {
+    const query = exerciseSearch.trim().toLowerCase();
+    if (!query) return activeGroup.exercises;
+    return activeGroup.exercises.filter((exerciseName) => exerciseName.toLowerCase().includes(query));
+  }, [activeGroup, exerciseSearch]);
+  const personalRecords = useMemo(() => {
+    const records = new Map<string, number>();
+
+    sessionExercises.forEach((exercise) => {
+      const maxWeight = exercise.sets.reduce((max, setItem) => {
+        const weight = Number(setItem.weight);
+        if (!Number.isFinite(weight)) return max;
+        return Math.max(max, weight);
+      }, 0);
+
+      const prevMax = records.get(exercise.name) ?? 0;
+      records.set(exercise.name, Math.max(prevMax, maxWeight));
+    });
+
+    return records;
+  }, [sessionExercises]);
 
   const legsPlanCount = useMemo(
     () => sessionExercises.filter((exercise) => exercise.groupId === "legs").reduce((sum, exercise) => sum + exercise.sets.length, 0),
@@ -290,6 +338,24 @@ export default function App() {
     const timerId = setTimeout(() => setNotice(""), 2000);
     return () => clearTimeout(timerId);
   }, [notice]);
+
+  useEffect(() => {
+    if (restSeconds === null) return;
+
+    const timerId = window.setTimeout(() => {
+      setRestSeconds((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          setNotice("Отдых завершен. Готово к следующему подходу.");
+          tg?.HapticFeedback?.impactOccurred?.("medium");
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => window.clearTimeout(timerId);
+  }, [restSeconds, tg]);
 
   function toggleExercise(exerciseId: string) {
     setSessionExercises((prev) =>
@@ -331,7 +397,8 @@ export default function App() {
       }),
     );
 
-    setNotice("Подход добавлен");
+    setRestSeconds(DEFAULT_REST_SECONDS);
+    setNotice(`Подход добавлен • отдых ${formatSeconds(DEFAULT_REST_SECONDS)}`);
     tg?.HapticFeedback?.impactOccurred?.("light");
   }
 
@@ -363,6 +430,7 @@ export default function App() {
     }
 
     setSheetOpen(false);
+    setExerciseSearch("");
     setNotice(`Добавлено: ${name}`);
     tg?.HapticFeedback?.impactOccurred?.("medium");
   }
@@ -397,7 +465,12 @@ export default function App() {
         <p className="selected-day">План на {selectedDay.fullLabel}</p>
 
         <section className="program-stack" aria-label="Блоки тренировок">
-          <article className="program-card legs">
+          <article
+            className="program-card legs"
+            style={{
+              backgroundImage: `linear-gradient(135deg, rgba(49, 215, 190, 0.9), rgba(78, 177, 255, 0.9)), url(${PROGRAM_IMAGES.legs})`,
+            }}
+          >
             <div>
               <p className="program-name">День ног</p>
               <p className="program-note">Силовой фокус: ягодицы, квадрицепс, задняя цепь</p>
@@ -405,7 +478,12 @@ export default function App() {
             <span className="program-count">{Math.max(legsPlanCount, 1)}</span>
           </article>
 
-          <article className="program-card upper">
+          <article
+            className="program-card upper"
+            style={{
+              backgroundImage: `linear-gradient(135deg, rgba(249, 81, 160, 0.9), rgba(255, 118, 97, 0.9)), url(${PROGRAM_IMAGES.upper})`,
+            }}
+          >
             <div>
               <p className="program-name">Верх тела</p>
               <p className="program-note">Плечи, спина, грудь и трицепс</p>
@@ -415,6 +493,26 @@ export default function App() {
         </section>
 
         {notice ? <p className="inline-notice">{notice}</p> : null}
+        {restSeconds !== null ? (
+          <section className="rest-timer" aria-label="Таймер отдыха">
+            <div>
+              <p className="rest-label">Отдых</p>
+              <p className="rest-value">{formatSeconds(restSeconds)}</p>
+            </div>
+            <div className="rest-actions">
+              <button
+                type="button"
+                className="rest-btn"
+                onClick={() => setRestSeconds((prev) => (prev === null ? DEFAULT_REST_SECONDS : Math.min(prev + 30, 600)))}
+              >
+                +30с
+              </button>
+              <button type="button" className="rest-btn is-ghost" onClick={() => setRestSeconds(null)}>
+                Пропустить
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         <section className="exercise-board" aria-label="Упражнения">
           {sessionExercises.length === 0 ? (
@@ -422,6 +520,7 @@ export default function App() {
           ) : (
             sessionExercises.map((exercise) => {
               const group = findGroup(exercise.groupId);
+              const prWeight = personalRecords.get(exercise.name) ?? 0;
 
               return (
                 <article key={exercise.id} className={`exercise-card ${exercise.expanded ? "expanded" : ""}`}>
@@ -431,13 +530,15 @@ export default function App() {
                     onClick={() => toggleExercise(exercise.id)}
                     aria-expanded={exercise.expanded}
                   >
-                    <span className="exercise-icon" aria-hidden="true">
-                      {group.icon}
+                    <span className="exercise-thumb" aria-hidden="true">
+                      <img src={group.coverImage} alt="" loading="lazy" />
+                      <span className="exercise-icon">{group.icon}</span>
                     </span>
                     <span className="exercise-text">
                       <strong>{exercise.name}</strong>
                       <small>{group.title}</small>
                     </span>
+                    {prWeight > 0 ? <span className="exercise-pr">PR {prWeight} кг</span> : null}
                     <span className="exercise-chevron" aria-hidden="true">
                       ▾
                     </span>
@@ -515,7 +616,10 @@ export default function App() {
                   key={group.id}
                   type="button"
                   className={`sheet-tab ${group.id === activeGroup.id ? "is-active" : ""}`}
-                  onClick={() => setActiveGroupId(group.id)}
+                  onClick={() => {
+                    setActiveGroupId(group.id);
+                    setExerciseSearch("");
+                  }}
                   aria-pressed={group.id === activeGroup.id}
                 >
                   {group.title}
@@ -523,19 +627,39 @@ export default function App() {
               ))}
             </div>
 
+            <label className="sheet-search">
+              <span>Поиск упражнения</span>
+              <input
+                type="text"
+                value={exerciseSearch}
+                onChange={(event) => setExerciseSearch(event.target.value)}
+                placeholder="Например: жим, тяга, присед"
+              />
+            </label>
+
             <ul className="sheet-list">
-              {activeGroup.exercises.map((exerciseName) => (
+              {filteredExercises.length === 0 ? (
+                <li className="sheet-empty">Ничего не найдено. Попробуй другой запрос.</li>
+              ) : (
+                filteredExercises.map((exerciseName) => (
                 <li key={exerciseName}>
                   <button
                     type="button"
                     className="sheet-item-btn"
                     onClick={() => addExerciseToSession(exerciseName, activeGroup.id)}
                   >
-                    <span>{exerciseName}</span>
+                    <span className="sheet-item-left">
+                      <img className="sheet-item-image" src={activeGroup.coverImage} alt="" loading="lazy" />
+                      <span className="sheet-item-copy">
+                        <strong>{exerciseName}</strong>
+                        <small>{activeGroup.title}</small>
+                      </span>
+                    </span>
                     <span>＋</span>
                   </button>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
           </aside>
         </div>
