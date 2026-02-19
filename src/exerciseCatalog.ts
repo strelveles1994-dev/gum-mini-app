@@ -10,10 +10,38 @@ export type ExerciseDefinition = {
   image: string;
 };
 
-const EXERCISE_IMAGE_BASE = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises";
+const FEMALE_IMAGE_POOL_BY_PLAN: Record<BasePlanId, string[]> = {
+  upper: [
+    "https://images.pexels.com/photos/14591551/pexels-photo-14591551.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/15549972/pexels-photo-15549972.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/1552103/pexels-photo-1552103.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/1480520/pexels-photo-1480520.jpeg?auto=compress&cs=tinysrgb&w=1200",
+  ],
+  lower: [
+    "https://images.pexels.com/photos/14599069/pexels-photo-14599069.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/12905796/pexels-photo-12905796.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/18060236/pexels-photo-18060236.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/414029/pexels-photo-414029.jpeg?auto=compress&cs=tinysrgb&w=1200",
+  ],
+  cardio: [
+    "https://images.pexels.com/photos/17898142/pexels-photo-17898142.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/18060056/pexels-photo-18060056.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/136404/pexels-photo-136404.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/1552242/pexels-photo-1552242.jpeg?auto=compress&cs=tinysrgb&w=1200",
+  ],
+};
 
-function exerciseImage(id: string): string {
-  return `${EXERCISE_IMAGE_BASE}/${id}/0.jpg`;
+function imageIndexFromId(id: string, poolLength: number): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return hash % poolLength;
+}
+
+function femaleImageForExercise(plan: BasePlanId, id: string): string {
+  const pool = FEMALE_IMAGE_POOL_BY_PLAN[plan];
+  return pool[imageIndexFromId(id, pool.length)];
 }
 
 export const muscleLabelByKey: Record<string, string> = {
@@ -42,11 +70,12 @@ function makeExercise(input: {
   sourceName: string;
   primaryMuscles: string[];
   secondaryMuscles?: string[];
+  image?: string;
 }): ExerciseDefinition {
   return {
     ...input,
     secondaryMuscles: input.secondaryMuscles ?? [],
-    image: exerciseImage(input.id),
+    image: input.image ?? femaleImageForExercise(input.plan, input.id),
   };
 }
 
@@ -100,6 +129,37 @@ const exerciseCatalog: ExerciseDefinition[] = [
     secondaryMuscles: ["shoulders"],
   }),
   makeExercise({
+    id: "Low_Cable_Crossover",
+    plan: "upper",
+    name: "Сведение рук в нижнем кроссовере",
+    sourceName: "Low Cable Crossover",
+    primaryMuscles: ["chest"],
+    secondaryMuscles: ["shoulders"],
+  }),
+  makeExercise({
+    id: "Single-Arm_Cable_Crossover",
+    plan: "upper",
+    name: "Сведение одной рукой в кроссовере",
+    sourceName: "Single-Arm Cable Crossover",
+    primaryMuscles: ["chest"],
+  }),
+  makeExercise({
+    id: "Smith_Machine_Bench_Press",
+    plan: "upper",
+    name: "Жим в тренажере Смита",
+    sourceName: "Smith Machine Bench Press",
+    primaryMuscles: ["chest"],
+    secondaryMuscles: ["shoulders", "triceps"],
+  }),
+  makeExercise({
+    id: "Smith_Machine_Incline_Bench_Press",
+    plan: "upper",
+    name: "Жим на наклонной скамье в Смите",
+    sourceName: "Smith Machine Incline Bench Press",
+    primaryMuscles: ["chest"],
+    secondaryMuscles: ["shoulders", "triceps"],
+  }),
+  makeExercise({
     id: "Wide-Grip_Lat_Pulldown",
     plan: "upper",
     name: "Тяга верхнего блока широким хватом",
@@ -120,6 +180,14 @@ const exerciseCatalog: ExerciseDefinition[] = [
     plan: "upper",
     name: "Тяга штанги в наклоне",
     sourceName: "Bent Over Barbell Row",
+    primaryMuscles: ["middle back"],
+    secondaryMuscles: ["biceps", "lats", "shoulders"],
+  }),
+  makeExercise({
+    id: "Smith_Machine_Bent_Over_Row",
+    plan: "upper",
+    name: "Тяга в наклоне в Смите",
+    sourceName: "Smith Machine Bent Over Row",
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats", "shoulders"],
   }),
@@ -154,6 +222,14 @@ const exerciseCatalog: ExerciseDefinition[] = [
     sourceName: "Barbell Shoulder Press",
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["chest", "triceps"],
+  }),
+  makeExercise({
+    id: "Smith_Machine_Overhead_Shoulder_Press",
+    plan: "upper",
+    name: "Жим над головой в Смите",
+    sourceName: "Smith Machine Overhead Shoulder Press",
+    primaryMuscles: ["shoulders"],
+    secondaryMuscles: ["triceps"],
   }),
   makeExercise({
     id: "Seated_Dumbbell_Press",
@@ -210,10 +286,26 @@ const exerciseCatalog: ExerciseDefinition[] = [
     secondaryMuscles: ["chest", "shoulders"],
   }),
   makeExercise({
+    id: "Smith_Machine_Close-Grip_Bench_Press",
+    plan: "upper",
+    name: "Жим узким хватом в Смите",
+    sourceName: "Smith Machine Close-Grip Bench Press",
+    primaryMuscles: ["triceps"],
+    secondaryMuscles: ["chest", "shoulders"],
+  }),
+  makeExercise({
     id: "Barbell_Squat",
     plan: "lower",
     name: "Приседания со штангой",
     sourceName: "Barbell Squat",
+    primaryMuscles: ["quadriceps"],
+    secondaryMuscles: ["calves", "glutes", "hamstrings", "lower back"],
+  }),
+  makeExercise({
+    id: "Smith_Machine_Squat",
+    plan: "lower",
+    name: "Приседания в Смите",
+    sourceName: "Smith Machine Squat",
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes", "hamstrings", "lower back"],
   }),
@@ -242,6 +334,14 @@ const exerciseCatalog: ExerciseDefinition[] = [
     secondaryMuscles: ["calves", "glutes", "hamstrings"],
   }),
   makeExercise({
+    id: "Smith_Machine_Leg_Press",
+    plan: "lower",
+    name: "Жим ногами в Смите",
+    sourceName: "Smith Machine Leg Press",
+    primaryMuscles: ["quadriceps"],
+    secondaryMuscles: ["calves", "glutes", "hamstrings"],
+  }),
+  makeExercise({
     id: "Barbell_Lunge",
     plan: "lower",
     name: "Выпады со штангой",
@@ -254,6 +354,14 @@ const exerciseCatalog: ExerciseDefinition[] = [
     plan: "lower",
     name: "Шагающие выпады со штангой",
     sourceName: "Barbell Walking Lunge",
+    primaryMuscles: ["quadriceps"],
+    secondaryMuscles: ["calves", "glutes", "hamstrings"],
+  }),
+  makeExercise({
+    id: "Smith_Single-Leg_Split_Squat",
+    plan: "lower",
+    name: "Болгарские приседания в Смите",
+    sourceName: "Smith Single-Leg Split Squat",
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes", "hamstrings"],
   }),
@@ -278,6 +386,14 @@ const exerciseCatalog: ExerciseDefinition[] = [
     plan: "lower",
     name: "Тяга на прямых ногах",
     sourceName: "Stiff-Legged Barbell Deadlift",
+    primaryMuscles: ["hamstrings"],
+    secondaryMuscles: ["glutes", "lower back"],
+  }),
+  makeExercise({
+    id: "Smith_Machine_Stiff-Legged_Deadlift",
+    plan: "lower",
+    name: "Тяга на прямых ногах в Смите",
+    sourceName: "Smith Machine Stiff-Legged Deadlift",
     primaryMuscles: ["hamstrings"],
     secondaryMuscles: ["glutes", "lower back"],
   }),
@@ -477,11 +593,23 @@ const legacyAliasByName: Record<string, string> = {
   "Французский жим": "Жим лежа узким хватом",
   "Разгибания рук в блоке": "Разгибание рук в верхнем блоке",
   "Сгибания рук с гантелями": "Сгибание рук с гантелями",
+  "Кроссовер": "Сведение рук в кроссовере",
+  "Сведение в кроссовере": "Сведение рук в кроссовере",
+  "Кроссовер снизу вверх": "Сведение рук в нижнем кроссовере",
+  "Жим в Смите": "Жим в тренажере Смита",
+  "Жим лежа в Смите": "Жим в тренажере Смита",
+  "Жим под углом в Смите": "Жим на наклонной скамье в Смите",
+  "Жим узким хватом в тренажере Смита": "Жим узким хватом в Смите",
+  "Тяга в наклоне в тренажере Смита": "Тяга в наклоне в Смите",
   "Приседания": "Приседания со штангой",
+  "Приседания в тренажере Смита": "Приседания в Смите",
   "Выпады": "Выпады со штангой",
   "Ягодичный мостик": "Ягодичный мостик со штангой",
   "Становая тяга": "Становая тяга сумо",
   "Болгарские сплит-приседания": "Шагающие выпады со штангой",
+  "Болгарские приседания в тренажере Смита": "Болгарские приседания в Смите",
+  "Жим ногами в тренажере Смита": "Жим ногами в Смите",
+  "Тяга на прямых ногах в тренажере Смита": "Тяга на прямых ногах в Смите",
   "Махи ногой в сторону": "Отведение ноги назад",
   "Отведение ноги назад в кроссовере": "Отведение ноги назад",
   "Беговая дорожка (ровный темп)": "Бег на дорожке (легкий темп)",
