@@ -2,7 +2,6 @@
 import "./App.css";
 
 type TgUser = {
-  id?: number;
   first_name?: string;
   language_code?: string;
 };
@@ -23,12 +22,14 @@ declare global {
   }
 }
 
-type ExerciseGroup = {
-  id: string;
+type DayPlanId = "upper" | "lower" | "cardio";
+
+type DayPlan = {
+  id: DayPlanId;
   title: string;
+  subtitle: string;
   icon: string;
-  coverImage: string;
-  exercises: string[];
+  image: string;
 };
 
 type WorkoutSet = {
@@ -40,100 +41,86 @@ type WorkoutSet = {
 type SessionExercise = {
   id: string;
   name: string;
-  groupId: string;
   expanded: boolean;
   sets: WorkoutSet[];
 };
 
-type DayChip = {
-  key: string;
-  label: string;
-  day: number;
-  fullLabel: string;
-  isToday: boolean;
-};
+type SessionByPlan = Record<DayPlanId, SessionExercise[]>;
+type SelectedExerciseByPlan = Record<DayPlanId, string>;
 
-const STORAGE_KEY = "gym-check-session-v3";
+type SetField = "weight" | "reps";
+
+const STORAGE_KEY = "gym-check-session-v4";
 const DEFAULT_REST_SECONDS = 90;
-const PROGRAM_IMAGES = {
-  legs:
-    "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80",
-  upper:
-    "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80",
-};
 
-const exerciseGroups: ExerciseGroup[] = [
+const dayPlans: DayPlan[] = [
   {
-    id: "legs",
-    title: "Ноги и ягодицы",
-    icon: "🦵",
-    coverImage:
-      "https://images.unsplash.com/photo-1434682881908-b43d0467b798?auto=format&fit=crop&w=900&q=80",
-    exercises: [
-      "Приседания",
-      "Выпады",
-      "Ягодичный мостик",
-      "Махи ногой назад/в бок на четвереньках",
-      "Становая тяга",
-    ],
-  },
-  {
-    id: "shoulders",
-    title: "Плечи",
+    id: "upper",
+    title: "День верха",
+    subtitle: "Грудь, спина, плечи и руки",
     icon: "💪",
-    coverImage:
-      "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&w=900&q=80",
-    exercises: [
-      "Жим в плечевом тренажере",
-      "Жим гантелей сидя",
-      "Тяга к подбородку",
-      "Тяга к поясу",
-      "Разведение гантелей в стороны",
-    ],
+    image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80",
   },
   {
-    id: "back",
-    title: "Спина",
-    icon: "🪽",
-    coverImage:
-      "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=900&q=80",
-    exercises: [
-      "Тяга верхнего блока",
-      "Тяга горизонтального блока",
-      "Гиперэкстензия",
-      "Тяга грифа к поясу",
-      "Тяга в рычажном тренажере",
-    ],
+    id: "lower",
+    title: "Ноги и ягодицы",
+    subtitle: "Квадрицепс, бицепс бедра, ягодицы",
+    icon: "🦵",
+    image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80",
   },
   {
-    id: "chest",
-    title: "Грудь",
-    icon: "🏋️",
-    coverImage:
-      "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=900&q=80",
-    exercises: [
-      "Жим лежа",
-      "Отжимания на брусьях",
-      "Отжимания от пола",
-      "Разведение гантелей лежа",
-      "Разведение в тренажере",
-    ],
-  },
-  {
-    id: "triceps",
-    title: "Трицепс",
-    icon: "🔥",
-    coverImage:
-      "https://images.unsplash.com/photo-1599058917765-a780eda07a3e?auto=format&fit=crop&w=900&q=80",
-    exercises: [
-      "Разгибания рук в блоке",
-      "Разгибание рук с гантелями на трицепс",
-      "Французский жим",
-      "Отжимания на брусьях",
-      "Обратные отжимания",
-    ],
+    id: "cardio",
+    title: "День кардио",
+    subtitle: "Выносливость, пульс и жиросжигание",
+    icon: "❤️",
+    image: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1200&q=80",
   },
 ];
+
+const exercisesByPlan: Record<DayPlanId, string[]> = {
+  upper: [
+    "Жим лежа",
+    "Тяга верхнего блока",
+    "Тяга горизонтального блока",
+    "Жим гантелей сидя",
+    "Тяга к подбородку",
+    "Разведение гантелей в стороны",
+    "Французский жим",
+    "Разгибания рук в блоке",
+    "Сгибания рук с гантелями",
+    "Отжимания на брусьях",
+  ],
+  lower: [
+    "Приседания",
+    "Выпады",
+    "Ягодичный мостик",
+    "Румынская тяга",
+    "Становая тяга",
+    "Болгарские сплит-приседания",
+    "Жим ногами",
+    "Махи ногой в сторону",
+    "Отведение ноги назад в кроссовере",
+    "Гиперэкстензия",
+  ],
+  cardio: [
+    "Беговая дорожка (ровный темп)",
+    "Интервальный бег",
+    "Велотренажер",
+    "Эллипс",
+    "Гребной тренажер",
+    "Скакалка интервалы",
+    "Ходьба в горку",
+    "Степпер",
+    "Air Bike интервалы",
+    "HIIT-круг 20/40",
+  ],
+};
+
+const dayPlanById: Record<DayPlanId, DayPlan> = {
+  upper: dayPlans[0],
+  lower: dayPlans[1],
+  cardio: dayPlans[2],
+};
 
 function createId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -156,109 +143,81 @@ function createSet(weight = "", reps = ""): WorkoutSet {
   };
 }
 
-type CreateExerciseOptions = {
-  sets?: WorkoutSet[];
-  expanded?: boolean;
-};
-
-function createExercise(name: string, groupId: string, options: CreateExerciseOptions = {}): SessionExercise {
+function createExercise(name: string, sets?: WorkoutSet[]): SessionExercise {
   return {
     id: createId(),
     name,
-    groupId,
-    expanded: options.expanded ?? false,
-    sets: options.sets && options.sets.length > 0 ? options.sets : [createSet()],
+    expanded: false,
+    sets: sets && sets.length > 0 ? sets : [createSet()],
   };
 }
 
-function buildDefaultSession(): SessionExercise[] {
-  return [
-    createExercise("Приседания", "legs", {
-      expanded: true,
-      sets: [createSet("40", "12"), createSet("45", "10"), createSet("45", "10")],
-    }),
-    createExercise("Жим лежа", "chest", { sets: [createSet("30", "12"), createSet("35", "10")] }),
-    createExercise("Тяга верхнего блока", "back", { sets: [createSet("35", "12")] }),
-    createExercise("Французский жим", "triceps", { sets: [createSet("18", "12")] }),
-  ];
+function buildDefaultSessionByPlan(): SessionByPlan {
+  return {
+    upper: [
+      createExercise("Жим лежа", [createSet("35", "12"), createSet("40", "10")]),
+      createExercise("Тяга верхнего блока", [createSet("40", "12")]),
+    ],
+    lower: [
+      createExercise("Приседания", [createSet("45", "12"), createSet("50", "10")]),
+      createExercise("Ягодичный мостик", [createSet("60", "12")]),
+    ],
+    cardio: [
+      createExercise("Беговая дорожка (ровный темп)", [createSet("0", "20")]),
+      createExercise("Велотренажер", [createSet("0", "15")]),
+    ],
+  };
 }
 
-function loadSession(): SessionExercise[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return buildDefaultSession();
+function normalizeExercises(input: unknown): SessionExercise[] {
+  if (!Array.isArray(input)) return [];
 
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return buildDefaultSession();
+  return input
+    .map((item) => {
+      const name = typeof item?.name === "string" ? item.name.trim().slice(0, 80) : "";
+      if (!name) return null;
 
-    const normalized = parsed.map((item) => {
-      const groupId =
-        typeof item?.groupId === "string" && exerciseGroups.some((group) => group.id === item.groupId)
-          ? item.groupId
-          : exerciseGroups[0].id;
-
-      const setItems = Array.isArray(item?.sets)
+      const sets = Array.isArray(item?.sets)
         ? item.sets.map((setItem: { weight?: unknown; reps?: unknown }) =>
             createSet(
               typeof setItem?.weight === "string" ? setItem.weight : String(setItem?.weight ?? ""),
               typeof setItem?.reps === "string" ? setItem.reps : String(setItem?.reps ?? ""),
             ),
           )
-        : [];
+        : [createSet()];
 
-      return createExercise(
-        typeof item?.name === "string" && item.name.trim().length > 0 ? item.name.trim().slice(0, 80) : "Упражнение",
-        groupId,
-        {
-          expanded: Boolean(item?.expanded),
-          sets: setItems.length > 0 ? setItems : [createSet()],
-        },
-      );
-    });
-
-    return normalized.length > 0 ? normalized : buildDefaultSession();
-  } catch {
-    return buildDefaultSession();
-  }
+      return {
+        id: createId(),
+        name,
+        expanded: Boolean(item?.expanded),
+        sets: sets.length > 0 ? sets : [createSet()],
+      } as SessionExercise;
+    })
+    .filter((item): item is SessionExercise => item !== null);
 }
 
-function formatDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+function loadSessionByPlan(): SessionByPlan {
+  const fallback = buildDefaultSessionByPlan();
 
-function getWeekStart(date: Date): Date {
-  const start = new Date(date);
-  const day = (start.getDay() + 6) % 7;
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - day);
-  return start;
-}
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return fallback;
 
-function buildWeekDays(locale: string): DayChip[] {
-  const start = getWeekStart(new Date());
-  const labelFormatter = new Intl.DateTimeFormat(locale, { weekday: "short" });
-  const fullFormatter = new Intl.DateTimeFormat(locale, { weekday: "long", day: "2-digit", month: "long" });
-  const todayKey = formatDateKey(new Date());
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return fallback;
 
-  return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
+    const upper = normalizeExercises((parsed as Partial<SessionByPlan>).upper);
+    const lower = normalizeExercises((parsed as Partial<SessionByPlan>).lower);
+    const cardio = normalizeExercises((parsed as Partial<SessionByPlan>).cardio);
 
     return {
-      key: formatDateKey(date),
-      label: labelFormatter.format(date).replace(".", "").toUpperCase(),
-      day: date.getDate(),
-      fullLabel: fullFormatter.format(date),
-      isToday: formatDateKey(date) === todayKey,
+      upper: upper.length > 0 ? upper : fallback.upper,
+      lower: lower.length > 0 ? lower : fallback.lower,
+      cardio: cardio.length > 0 ? cardio : fallback.cardio,
     };
-  });
-}
-
-function findGroup(groupId: string): ExerciseGroup {
-  return exerciseGroups.find((group) => group.id === groupId) ?? exerciseGroups[0];
+  } catch {
+    return fallback;
+  }
 }
 
 function formatSeconds(totalSeconds: number): string {
@@ -270,59 +229,49 @@ function formatSeconds(totalSeconds: number): string {
 
 export default function App() {
   const tg = useMemo(() => window.Telegram?.WebApp, []);
-  const locale = tg?.initDataUnsafe?.user?.language_code || "ru-RU";
   const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "спортсмен";
+  const isDark = tg?.colorScheme === "dark";
 
-  const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>(() => loadSession());
-  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => (new Date().getDay() + 6) % 7);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [activeGroupId, setActiveGroupId] = useState(exerciseGroups[0].id);
-  const [exerciseSearch, setExerciseSearch] = useState("");
+  const [selectedPlanId, setSelectedPlanId] = useState<DayPlanId>("upper");
+  const [sessionByPlan, setSessionByPlan] = useState<SessionByPlan>(() => loadSessionByPlan());
+  const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
+    upper: exercisesByPlan.upper[0],
+    lower: exercisesByPlan.lower[0],
+    cardio: exercisesByPlan.cardio[0],
+  });
   const [restSeconds, setRestSeconds] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
 
-  const isDark = tg?.colorScheme === "dark";
+  const selectedPlan = dayPlanById[selectedPlanId];
+  const activeExercises = sessionByPlan[selectedPlanId];
 
-  const weekDays = useMemo(() => buildWeekDays(locale), [locale]);
-  const selectedDay = weekDays[selectedDayIndex] ?? weekDays[0];
-  const activeGroup = useMemo(
-    () => exerciseGroups.find((group) => group.id === activeGroupId) ?? exerciseGroups[0],
-    [activeGroupId],
+  const setCountsByPlan = useMemo(
+    () => ({
+      upper: sessionByPlan.upper.reduce((sum, exercise) => sum + exercise.sets.length, 0),
+      lower: sessionByPlan.lower.reduce((sum, exercise) => sum + exercise.sets.length, 0),
+      cardio: sessionByPlan.cardio.reduce((sum, exercise) => sum + exercise.sets.length, 0),
+    }),
+    [sessionByPlan],
   );
-  const filteredExercises = useMemo(() => {
-    const query = exerciseSearch.trim().toLowerCase();
-    if (!query) return activeGroup.exercises;
-    return activeGroup.exercises.filter((exerciseName) => exerciseName.toLowerCase().includes(query));
-  }, [activeGroup, exerciseSearch]);
+
   const personalRecords = useMemo(() => {
     const records = new Map<string, number>();
 
-    sessionExercises.forEach((exercise) => {
-      const maxWeight = exercise.sets.reduce((max, setItem) => {
-        const weight = Number(setItem.weight);
-        if (!Number.isFinite(weight)) return max;
-        return Math.max(max, weight);
-      }, 0);
+    Object.values(sessionByPlan)
+      .flat()
+      .forEach((exercise) => {
+        const maxWeight = exercise.sets.reduce((max, setItem) => {
+          const weight = Number(setItem.weight);
+          if (!Number.isFinite(weight)) return max;
+          return Math.max(max, weight);
+        }, 0);
 
-      const prevMax = records.get(exercise.name) ?? 0;
-      records.set(exercise.name, Math.max(prevMax, maxWeight));
-    });
+        const current = records.get(exercise.name) ?? 0;
+        records.set(exercise.name, Math.max(current, maxWeight));
+      });
 
     return records;
-  }, [sessionExercises]);
-
-  const legsPlanCount = useMemo(
-    () => sessionExercises.filter((exercise) => exercise.groupId === "legs").reduce((sum, exercise) => sum + exercise.sets.length, 0),
-    [sessionExercises],
-  );
-
-  const upperPlanCount = useMemo(
-    () =>
-      sessionExercises
-        .filter((exercise) => ["shoulders", "back", "chest", "triceps"].includes(exercise.groupId))
-        .reduce((sum, exercise) => sum + exercise.sets.length, 0),
-    [sessionExercises],
-  );
+  }, [sessionByPlan]);
 
   useEffect(() => {
     tg?.ready();
@@ -330,8 +279,8 @@ export default function App() {
   }, [tg]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionExercises));
-  }, [sessionExercises]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionByPlan));
+  }, [sessionByPlan]);
 
   useEffect(() => {
     if (!notice) return;
@@ -345,11 +294,13 @@ export default function App() {
     const timerId = window.setTimeout(() => {
       setRestSeconds((prev) => {
         if (prev === null) return null;
+
         if (prev <= 1) {
-          setNotice("Отдых завершен. Готово к следующему подходу.");
+          setNotice("Отдых завершен. Следующий подход.");
           tg?.HapticFeedback?.impactOccurred?.("medium");
           return null;
         }
+
         return prev - 1;
       });
     }, 1000);
@@ -357,18 +308,25 @@ export default function App() {
     return () => window.clearTimeout(timerId);
   }, [restSeconds, tg]);
 
+  function updateExercisesForPlan(planId: DayPlanId, updater: (prev: SessionExercise[]) => SessionExercise[]) {
+    setSessionByPlan((prev) => ({
+      ...prev,
+      [planId]: updater(prev[planId]),
+    }));
+  }
+
   function toggleExercise(exerciseId: string) {
-    setSessionExercises((prev) =>
+    updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) =>
         exercise.id === exerciseId ? { ...exercise, expanded: !exercise.expanded } : exercise,
       ),
     );
   }
 
-  function updateSetValue(exerciseId: string, setId: string, field: "weight" | "reps", value: string) {
+  function updateSetValue(exerciseId: string, setId: string, field: SetField, value: string) {
     const sanitized = sanitizeNumber(value, field === "weight" ? 3 : 2);
 
-    setSessionExercises((prev) =>
+    updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) => {
         if (exercise.id !== exerciseId) return exercise;
 
@@ -383,7 +341,7 @@ export default function App() {
   }
 
   function addSet(exerciseId: string) {
-    setSessionExercises((prev) =>
+    updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) => {
         if (exercise.id !== exerciseId) return exercise;
 
@@ -403,35 +361,34 @@ export default function App() {
   }
 
   function removeExercise(exerciseId: string) {
-    setSessionExercises((prev) => prev.filter((exercise) => exercise.id !== exerciseId));
+    updateExercisesForPlan(selectedPlanId, (prev) => prev.filter((exercise) => exercise.id !== exerciseId));
     setNotice("Упражнение удалено");
-    tg?.HapticFeedback?.impactOccurred?.("light");
   }
 
-  function addExerciseToSession(name: string, groupId: string) {
+  function addExerciseFromDropdown() {
+    const exerciseName = selectedExerciseByPlan[selectedPlanId];
+    if (!exerciseName) return;
+
     let duplicate = false;
 
-    setSessionExercises((prev) => {
-      const exists = prev.some((exercise) => exercise.name.toLowerCase() === name.toLowerCase());
+    updateExercisesForPlan(selectedPlanId, (prev) => {
+      const exists = prev.some((exercise) => exercise.name.toLowerCase() === exerciseName.toLowerCase());
       if (exists) {
         duplicate = true;
         return prev.map((exercise) =>
-          exercise.name.toLowerCase() === name.toLowerCase() ? { ...exercise, expanded: true } : exercise,
+          exercise.name.toLowerCase() === exerciseName.toLowerCase() ? { ...exercise, expanded: true } : exercise,
         );
       }
 
-      return [...prev, createExercise(name, groupId, { expanded: true })];
+      return [...prev, createExercise(exerciseName, [createSet()])];
     });
 
     if (duplicate) {
-      setNotice("Это упражнение уже есть в списке");
-      tg?.HapticFeedback?.impactOccurred?.("light");
+      setNotice("Это упражнение уже есть в текущем дне");
       return;
     }
 
-    setSheetOpen(false);
-    setExerciseSearch("");
-    setNotice(`Добавлено: ${name}`);
+    setNotice(`Добавлено: ${exerciseName}`);
     tg?.HapticFeedback?.impactOccurred?.("medium");
   }
 
@@ -448,51 +405,58 @@ export default function App() {
           </button>
         </header>
 
-        <section className="week-strip" aria-label="Календарь недели">
-          {weekDays.map((day, index) => (
+        <section className="plan-tabs" aria-label="Тип тренировочного дня">
+          {dayPlans.map((plan) => (
             <button
-              key={day.key}
+              key={plan.id}
               type="button"
-              className={`day-chip ${selectedDayIndex === index ? "is-active" : ""} ${day.isToday ? "is-today" : ""}`}
-              onClick={() => setSelectedDayIndex(index)}
+              className={`plan-tab ${selectedPlanId === plan.id ? "is-active" : ""}`}
+              onClick={() => setSelectedPlanId(plan.id)}
             >
-              <span className="day-label">{day.label}</span>
-              <span className="day-number">{day.day}</span>
+              <span className="tab-title">{plan.title}</span>
+              <span className="tab-count">{setCountsByPlan[plan.id]}</span>
             </button>
           ))}
         </section>
 
-        <p className="selected-day">План на {selectedDay.fullLabel}</p>
+        <section
+          className="plan-hero"
+          style={{
+            backgroundImage: `linear-gradient(120deg, rgba(20, 26, 40, 0.42), rgba(20, 26, 40, 0.12)), url(${selectedPlan.image})`,
+          }}
+        >
+          <p className="plan-hero-title">{selectedPlan.title}</p>
+          <p className="plan-hero-subtitle">{selectedPlan.subtitle}</p>
+        </section>
 
-        <section className="program-stack" aria-label="Блоки тренировок">
-          <article
-            className="program-card legs"
-            style={{
-              backgroundImage: `linear-gradient(135deg, rgba(49, 215, 190, 0.9), rgba(78, 177, 255, 0.9)), url(${PROGRAM_IMAGES.legs})`,
-            }}
-          >
-            <div>
-              <p className="program-name">День ног</p>
-              <p className="program-note">Силовой фокус: ягодицы, квадрицепс, задняя цепь</p>
-            </div>
-            <span className="program-count">{Math.max(legsPlanCount, 1)}</span>
-          </article>
-
-          <article
-            className="program-card upper"
-            style={{
-              backgroundImage: `linear-gradient(135deg, rgba(249, 81, 160, 0.9), rgba(255, 118, 97, 0.9)), url(${PROGRAM_IMAGES.upper})`,
-            }}
-          >
-            <div>
-              <p className="program-name">Верх тела</p>
-              <p className="program-note">Плечи, спина, грудь и трицепс</p>
-            </div>
-            <span className="program-count">{Math.max(upperPlanCount, 1)}</span>
-          </article>
+        <section className="exercise-picker" aria-label="Добавление упражнения">
+          <label htmlFor="exercise-select">Упражнения для: {selectedPlan.title}</label>
+          <div className="picker-row">
+            <select
+              id="exercise-select"
+              className="picker-select"
+              value={selectedExerciseByPlan[selectedPlanId]}
+              onChange={(event) =>
+                setSelectedExerciseByPlan((prev) => ({
+                  ...prev,
+                  [selectedPlanId]: event.target.value,
+                }))
+              }
+            >
+              {exercisesByPlan[selectedPlanId].map((exerciseName) => (
+                <option key={exerciseName} value={exerciseName}>
+                  {exerciseName}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="picker-add-btn" onClick={addExerciseFromDropdown}>
+              Добавить
+            </button>
+          </div>
         </section>
 
         {notice ? <p className="inline-notice">{notice}</p> : null}
+
         {restSeconds !== null ? (
           <section className="rest-timer" aria-label="Таймер отдыха">
             <div>
@@ -514,12 +478,11 @@ export default function App() {
           </section>
         ) : null}
 
-        <section className="exercise-board" aria-label="Упражнения">
-          {sessionExercises.length === 0 ? (
-            <p className="exercise-empty">Добавь первое упражнение кнопкой внизу.</p>
+        <section className="exercise-board" aria-label="Список упражнений">
+          {activeExercises.length === 0 ? (
+            <p className="exercise-empty">В этом дне пока нет упражнений. Выбери из выпадающего списка выше.</p>
           ) : (
-            sessionExercises.map((exercise) => {
-              const group = findGroup(exercise.groupId);
+            activeExercises.map((exercise) => {
               const prWeight = personalRecords.get(exercise.name) ?? 0;
 
               return (
@@ -530,13 +493,12 @@ export default function App() {
                     onClick={() => toggleExercise(exercise.id)}
                     aria-expanded={exercise.expanded}
                   >
-                    <span className="exercise-thumb" aria-hidden="true">
-                      <img src={group.coverImage} alt="" loading="lazy" />
-                      <span className="exercise-icon">{group.icon}</span>
+                    <span className="exercise-icon" aria-hidden="true">
+                      {selectedPlan.icon}
                     </span>
                     <span className="exercise-text">
                       <strong>{exercise.name}</strong>
-                      <small>{group.title}</small>
+                      <small>{selectedPlan.title}</small>
                     </span>
                     {prWeight > 0 ? <span className="exercise-pr">PR {prWeight} кг</span> : null}
                     <span className="exercise-chevron" aria-hidden="true">
@@ -589,81 +551,7 @@ export default function App() {
             })
           )}
         </section>
-
-        <footer className="bottom-dock">
-          <button type="button" className="dock-side-btn" onClick={() => setSheetOpen(true)} aria-label="Открыть каталог">
-            …
-          </button>
-          <button type="button" className="dock-main-btn" onClick={() => setSheetOpen(true)}>
-            Добавить
-          </button>
-        </footer>
       </main>
-
-      {sheetOpen ? (
-        <div className="sheet-overlay" role="presentation" onClick={() => setSheetOpen(false)}>
-          <aside className="sheet" aria-label="Каталог упражнений" onClick={(event) => event.stopPropagation()}>
-            <div className="sheet-header">
-              <h2>Добавить упражнение</h2>
-              <button type="button" onClick={() => setSheetOpen(false)}>
-                Закрыть
-              </button>
-            </div>
-
-            <div className="sheet-tabs" role="tablist" aria-label="Группы мышц">
-              {exerciseGroups.map((group) => (
-                <button
-                  key={group.id}
-                  type="button"
-                  className={`sheet-tab ${group.id === activeGroup.id ? "is-active" : ""}`}
-                  onClick={() => {
-                    setActiveGroupId(group.id);
-                    setExerciseSearch("");
-                  }}
-                  aria-pressed={group.id === activeGroup.id}
-                >
-                  {group.title}
-                </button>
-              ))}
-            </div>
-
-            <label className="sheet-search">
-              <span>Поиск упражнения</span>
-              <input
-                type="text"
-                value={exerciseSearch}
-                onChange={(event) => setExerciseSearch(event.target.value)}
-                placeholder="Например: жим, тяга, присед"
-              />
-            </label>
-
-            <ul className="sheet-list">
-              {filteredExercises.length === 0 ? (
-                <li className="sheet-empty">Ничего не найдено. Попробуй другой запрос.</li>
-              ) : (
-                filteredExercises.map((exerciseName) => (
-                <li key={exerciseName}>
-                  <button
-                    type="button"
-                    className="sheet-item-btn"
-                    onClick={() => addExerciseToSession(exerciseName, activeGroup.id)}
-                  >
-                    <span className="sheet-item-left">
-                      <img className="sheet-item-image" src={activeGroup.coverImage} alt="" loading="lazy" />
-                      <span className="sheet-item-copy">
-                        <strong>{exerciseName}</strong>
-                        <small>{activeGroup.title}</small>
-                      </span>
-                    </span>
-                    <span>＋</span>
-                  </button>
-                </li>
-                ))
-              )}
-            </ul>
-          </aside>
-        </div>
-      ) : null}
     </div>
   );
 }
