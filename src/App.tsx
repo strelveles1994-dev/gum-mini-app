@@ -50,6 +50,70 @@ const workoutLabels: Record<WorkoutType, string> = {
   Recovery: "Восстановление",
 };
 
+type ExerciseCategory = {
+  id: string;
+  title: string;
+  exercises: string[];
+};
+
+const exerciseCatalog: ExerciseCategory[] = [
+  {
+    id: "legs",
+    title: "Ноги и ягодицы",
+    exercises: [
+      "Приседания",
+      "Выпады",
+      "Ягодичный мостик",
+      "Махи ногой назад/в бок на четвереньках",
+      "Становая тяга",
+    ],
+  },
+  {
+    id: "shoulders",
+    title: "Плечи",
+    exercises: [
+      "Жим в плечевом тренажере",
+      "Жим гантелей сидя",
+      "Тяга к подбородку",
+      "Тяга к поясу",
+      "Разведение гантелей в стороны",
+    ],
+  },
+  {
+    id: "back",
+    title: "Спина",
+    exercises: [
+      "Тяга верхнего блока",
+      "Тяга горизонтального блока",
+      "Гиперэкстензия",
+      "Тяга грифа к поясу",
+      "Тяга в рычажном тренажере",
+    ],
+  },
+  {
+    id: "chest",
+    title: "Грудь",
+    exercises: [
+      "Жим лежа",
+      "Отжимания на брусьях",
+      "Отжимания от пола",
+      "Разведение гантелей лежа",
+      "Разведение в тренажере",
+    ],
+  },
+  {
+    id: "triceps",
+    title: "Трицепс",
+    exercises: [
+      "Разгибания рук в блоке",
+      "Разгибание рук с гантелями на трицепс",
+      "Французский жим",
+      "Отжимания на брусьях",
+      "Обратные отжимания",
+    ],
+  },
+];
+
 const defaultForm = {
   type: "Strength" as WorkoutType,
   minutes: "45",
@@ -151,6 +215,7 @@ export default function App() {
   const [goal, setGoal] = useState<number>(() => loadGoal());
   const [form, setForm] = useState(defaultForm);
   const [status, setStatus] = useState("");
+  const [activeCategoryId, setActiveCategoryId] = useState(exerciseCatalog[0].id);
 
   const isDark = tg?.colorScheme === "dark";
   const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "Спортсмен";
@@ -174,6 +239,10 @@ export default function App() {
   const progress = Math.min(100, Math.round((workoutsThisWeek / goal) * 100));
   const leftToGoal = Math.max(0, goal - workoutsThisWeek);
   const recentWorkouts = workouts.slice(0, 6);
+  const activeCategory = useMemo(
+    () => exerciseCatalog.find((category) => category.id === activeCategoryId) ?? exerciseCatalog[0],
+    [activeCategoryId],
+  );
 
   useEffect(() => {
     tg?.ready();
@@ -220,6 +289,15 @@ export default function App() {
 
   function deleteWorkout(id: string) {
     setWorkouts((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function addExerciseToNote(exercise: string) {
+    setForm((prev) => {
+      const nextNote = prev.note.trim() ? `${exercise}; ${prev.note.trim()}` : exercise;
+      return { ...prev, note: nextNote.slice(0, 120) };
+    });
+    setStatus(`Добавлено в заметки: ${exercise}`);
+    tg?.HapticFeedback?.impactOccurred?.("light");
   }
 
   const todayLabel = new Intl.DateTimeFormat(locale, {
@@ -326,6 +404,38 @@ export default function App() {
 
         <section className="card reveal r4">
           <div className="section-head compact">
+            <h2>Каталог упражнений</h2>
+            <p>Выбери группу мышц и добавь упражнение в заметки одним нажатием.</p>
+          </div>
+
+          <div className="catalog-tabs" role="tablist" aria-label="Группы мышц">
+            {exerciseCatalog.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                className={`catalog-tab ${category.id === activeCategory.id ? "is-active" : ""}`}
+                onClick={() => setActiveCategoryId(category.id)}
+                aria-pressed={category.id === activeCategory.id}
+              >
+                {category.title}
+              </button>
+            ))}
+          </div>
+
+          <ul className="exercise-list">
+            {activeCategory.exercises.map((exercise) => (
+              <li key={exercise} className="exercise-item">
+                <span className="exercise-name">{exercise}</span>
+                <button className="exercise-add-btn" type="button" onClick={() => addExerciseToNote(exercise)}>
+                  В заметки
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="card reveal r5">
+          <div className="section-head compact">
             <h2>Цель на неделю</h2>
             <p>{workoutsThisWeek >= goal ? "Цель выполнена. Отличная работа." : `До цели осталось: ${leftToGoal}.`}</p>
           </div>
@@ -349,7 +459,7 @@ export default function App() {
           <p className="progress-text">{progress}% выполнено за неделю</p>
         </section>
 
-        <section className="card reveal r5">
+        <section className="card reveal r6">
           <div className="section-head compact">
             <h2>Последние тренировки</h2>
             <p>{recentWorkouts.length ? "Недавние сессии" : "Пока нет тренировок"}</p>
