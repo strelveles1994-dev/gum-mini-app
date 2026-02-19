@@ -44,10 +44,10 @@ const GOAL_KEY = "gym-check-weekly-goal-v1";
 const DEFAULT_GOAL = 4;
 
 const workoutLabels: Record<WorkoutType, string> = {
-  Strength: "Strength",
-  Cardio: "Cardio",
-  Mobility: "Mobility",
-  Recovery: "Recovery",
+  Strength: "Силовая",
+  Cardio: "Кардио",
+  Mobility: "Мобильность",
+  Recovery: "Восстановление",
 };
 
 const defaultForm = {
@@ -136,8 +136,8 @@ function getStreakDays(workouts: Workout[]): number {
   return streak;
 }
 
-function formatWorkoutDate(isoDate: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+function formatWorkoutDate(isoDate: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -153,7 +153,8 @@ export default function App() {
   const [status, setStatus] = useState("");
 
   const isDark = tg?.colorScheme === "dark";
-  const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "Athlete";
+  const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "Спортсмен";
+  const locale = tg?.initDataUnsafe?.user?.language_code || "ru-RU";
 
   const weekStart = useMemo(() => getWeekStart(new Date()), []);
 
@@ -198,7 +199,7 @@ export default function App() {
 
     const minutes = Number(form.minutes);
     if (!Number.isFinite(minutes) || minutes < 5 || minutes > 300) {
-      setStatus("Enter minutes from 5 to 300.");
+      setStatus("Укажи длительность от 5 до 300 минут.");
       return;
     }
 
@@ -213,7 +214,7 @@ export default function App() {
 
     setWorkouts((prev) => [item, ...prev]);
     setForm((prev) => ({ ...prev, minutes: "45", note: "" }));
-    setStatus("Workout saved.");
+    setStatus("Тренировка сохранена.");
     tg?.HapticFeedback?.impactOccurred?.("medium");
   }
 
@@ -221,7 +222,7 @@ export default function App() {
     setWorkouts((prev) => prev.filter((item) => item.id !== id));
   }
 
-  const todayLabel = new Intl.DateTimeFormat(undefined, {
+  const todayLabel = new Intl.DateTimeFormat(locale, {
     weekday: "long",
     day: "2-digit",
     month: "long",
@@ -233,44 +234,44 @@ export default function App() {
         <section className="card hero reveal r1">
           <p className="eyebrow">Gym Check</p>
           <h1>
-            Welcome back, <span>{userName}</span>
+            С возвращением, <span>{userName}</span>
           </h1>
-          <p className="hero-text">Track your workouts and keep momentum every week.</p>
+          <p className="hero-text">Отмечай тренировки и держи ритм каждую неделю.</p>
           <div className="hero-meta">
             <span>{todayLabel}</span>
-            <span>{tg?.platform ? `${tg.platform} • v${tg.version ?? "?"}` : "Browser preview"}</span>
+            <span>{tg?.platform ? `${tg.platform} • v${tg.version ?? "?"}` : "Предпросмотр в браузере"}</span>
           </div>
         </section>
 
         <section className="stats-grid reveal r2">
           <article className="card stat-card">
-            <p className="stat-label">This Week</p>
+            <p className="stat-label">Эта неделя</p>
             <p className="stat-value">{workoutsThisWeek}</p>
-            <p className="stat-caption">workouts</p>
+            <p className="stat-caption">тренировок</p>
           </article>
 
           <article className="card stat-card">
-            <p className="stat-label">Streak</p>
+            <p className="stat-label">Серия</p>
             <p className="stat-value">{streakDays}</p>
-            <p className="stat-caption">days in a row</p>
+            <p className="stat-caption">дней подряд</p>
           </article>
 
           <article className="card stat-card">
-            <p className="stat-label">Minutes</p>
+            <p className="stat-label">Минуты</p>
             <p className="stat-value">{minutesThisWeek}</p>
-            <p className="stat-caption">this week</p>
+            <p className="stat-caption">за неделю</p>
           </article>
         </section>
 
         <section className="card reveal r3">
           <div className="section-head">
-            <h2>Add Workout</h2>
-            <p>{status || "Log a session in under 10 seconds."}</p>
+            <h2>Добавить тренировку</h2>
+            <p>{status || "Запиши тренировку меньше чем за 10 секунд."}</p>
           </div>
 
           <form className="workout-form" onSubmit={addWorkout}>
             <label className="field">
-              <span>Type</span>
+              <span>Тип</span>
               <select
                 value={form.type}
                 onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value as WorkoutType }))}
@@ -284,7 +285,7 @@ export default function App() {
             </label>
 
             <label className="field">
-              <span>Minutes</span>
+              <span>Минуты</span>
               <input
                 type="number"
                 min={5}
@@ -296,7 +297,7 @@ export default function App() {
             </label>
 
             <label className="field field-intensity">
-              <span>Intensity: {form.intensity}/5</span>
+              <span>Интенсивность: {form.intensity}/5</span>
               <input
                 type="range"
                 min={1}
@@ -307,30 +308,30 @@ export default function App() {
             </label>
 
             <label className="field field-note">
-              <span>Notes (optional)</span>
+              <span>Заметки (необязательно)</span>
               <input
                 type="text"
                 value={form.note}
                 maxLength={120}
                 onChange={(event) => setForm((prev) => ({ ...prev, note: event.target.value }))}
-                placeholder="Leg day, PR attempts, light run..."
+                placeholder="День ног, попытки PR, легкий бег..."
               />
             </label>
 
             <button className="primary-btn" type="submit">
-              Save Workout
+              Сохранить тренировку
             </button>
           </form>
         </section>
 
         <section className="card reveal r4">
           <div className="section-head compact">
-            <h2>Weekly Goal</h2>
-            <p>{workoutsThisWeek >= goal ? "Goal reached. Keep rolling." : `${leftToGoal} left to hit your goal.`}</p>
+            <h2>Цель на неделю</h2>
+            <p>{workoutsThisWeek >= goal ? "Цель выполнена. Отличная работа." : `До цели осталось: ${leftToGoal}.`}</p>
           </div>
 
           <label className="goal-label" htmlFor="goal-range">
-            Goal: <strong>{goal}</strong> workouts
+            Цель: <strong>{goal}</strong> тренировок
           </label>
           <input
             id="goal-range"
@@ -345,33 +346,33 @@ export default function App() {
           <div className="progress-track" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
             <div className="progress-fill" style={{ width: `${progress}%` }} />
           </div>
-          <p className="progress-text">{progress}% complete this week</p>
+          <p className="progress-text">{progress}% выполнено за неделю</p>
         </section>
 
         <section className="card reveal r5">
           <div className="section-head compact">
-            <h2>Recent Workouts</h2>
-            <p>{recentWorkouts.length ? "Latest sessions" : "No sessions yet"}</p>
+            <h2>Последние тренировки</h2>
+            <p>{recentWorkouts.length ? "Недавние сессии" : "Пока нет тренировок"}</p>
           </div>
 
           {recentWorkouts.length === 0 ? (
-            <p className="empty-state">Start with your first workout above.</p>
+            <p className="empty-state">Начни с первой тренировки выше.</p>
           ) : (
             <ul className="history-list">
               {recentWorkouts.map((item) => (
                 <li key={item.id} className="history-item">
                   <div className="history-copy">
                     <p className="history-title">
-                      {workoutLabels[item.type]} • {item.minutes} min • Intensity {item.intensity}/5
+                      {workoutLabels[item.type]} • {item.minutes} мин • Интенсивность {item.intensity}/5
                     </p>
                     <p className="history-meta">
-                      {formatWorkoutDate(item.createdAt)}
+                      {formatWorkoutDate(item.createdAt, locale)}
                       {item.note ? ` • ${item.note}` : ""}
                     </p>
                   </div>
 
                   <button className="ghost-btn" type="button" onClick={() => deleteWorkout(item.id)}>
-                    Delete
+                    Удалить
                   </button>
                 </li>
               ))}
@@ -380,7 +381,7 @@ export default function App() {
         </section>
 
         <footer className="footer-note">
-          {tg?.initData ? "Telegram session connected" : "Opened outside Telegram: demo mode"}
+          {tg?.initData ? "Сессия Telegram подключена" : "Открыто вне Telegram: демо-режим"}
         </footer>
       </main>
     </div>

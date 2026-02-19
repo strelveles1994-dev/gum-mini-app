@@ -12,7 +12,7 @@ async function getBotToken() {
 
   const rl = createInterface({ input, output });
   try {
-    const token = (await rl.question("Paste BOT_TOKEN from BotFather and press Enter: ")).trim();
+    const token = (await rl.question("Вставь BOT_TOKEN из BotFather и нажми Enter: ")).trim();
     if (!token) {
       throw new Error("EMPTY_TOKEN");
     }
@@ -27,27 +27,27 @@ function printStartupError(error) {
   const lower = message.toLowerCase();
 
   if (message.includes("NO_TOKEN_NONINTERACTIVE")) {
-    console.error("BOT_TOKEN is missing and terminal is non-interactive.");
-    console.error("Run: $env:BOT_TOKEN='YOUR_TOKEN'; npm run bot");
+    console.error("Переменная BOT_TOKEN не задана, а терминал не интерактивный.");
+    console.error("Запусти так: $env:BOT_TOKEN='ТВОЙ_ТОКЕН'; npm run bot");
     return;
   }
 
   if (message.includes("EMPTY_TOKEN")) {
-    console.error("Token is empty. Start again and paste BOT_TOKEN.");
+    console.error("Токен пустой. Запусти снова и вставь BOT_TOKEN.");
     return;
   }
 
   if (lower.includes("401") || lower.includes("unauthorized")) {
-    console.error("Telegram returned 401 Unauthorized. BOT_TOKEN is invalid.");
+    console.error("Telegram вернул 401 Unauthorized. BOT_TOKEN неверный.");
     return;
   }
 
   if (lower.includes("econnreset") || lower.includes("enotfound") || lower.includes("network")) {
-    console.error("Network error while contacting Telegram API. Check internet/VPN.");
+    console.error("Ошибка сети при обращении к Telegram API. Проверь интернет/VPN.");
     return;
   }
 
-  console.error("Bot failed to start:", message);
+  console.error("Бот не запустился:", message);
 }
 
 let bot;
@@ -56,17 +56,17 @@ async function main() {
   bot = new Telegraf(await getBotToken());
 
   bot.start(async (ctx) => {
-    await ctx.reply("Open Gym Check", {
+    await ctx.reply("Открыть Gym Check", {
       reply_markup: {
         inline_keyboard: [
-          [{ text: "Open", web_app: { url: "https://gum-mini-app.vercel.app" } }],
+          [{ text: "Открыть", web_app: { url: "https://gum-mini-app.vercel.app" } }],
         ],
       },
     });
   });
 
   await bot.launch();
-  console.log("Bot started. Send /start to your bot in Telegram.");
+  console.log("Бот запущен. Отправь /start своему боту в Telegram.");
 }
 
 process.once("SIGINT", () => bot?.stop("SIGINT"));
