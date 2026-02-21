@@ -258,6 +258,68 @@
   opacity: 0.95;
 }
 
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.action-btn {
+  min-height: 42px;
+  border: 1px solid var(--card-border);
+  border-radius: 11px;
+  background: var(--card-bg);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 11px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.action-btn.is-active {
+  border-color: transparent;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.theme-dark .action-btn.is-active {
+  color: #1a1f2a;
+}
+
+.action-hint {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-sub);
+}
+
+.action-btn.is-active .action-hint {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.theme-dark .action-btn.is-active .action-hint {
+  color: rgba(15, 20, 33, 0.7);
+}
+
+.action-drawer {
+  animation: drawer-slide 0.18s ease;
+}
+
+@keyframes drawer-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .exercise-picker {
   border: 1px solid var(--card-border);
   border-radius: 12px;
@@ -498,15 +560,46 @@
   color: var(--text-sub);
 }
 
-.rest-timer {
+.rest-drawer {
   border: 1px solid var(--card-border);
   border-radius: 12px;
   background: var(--card-bg);
-  padding: 9px 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.rest-drawer-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.rest-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.rest-input-grid label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-sub);
+  text-transform: uppercase;
+}
+
+.rest-time-input {
+  min-height: 38px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--text-main);
+  text-align: center;
+  font-weight: 700;
+  padding: 0 8px;
 }
 
 .rest-label {
@@ -676,7 +769,7 @@
 .set-head,
 .set-row {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr) 66px;
   gap: 6px;
   align-items: center;
 }
@@ -695,6 +788,11 @@
   font-weight: 700;
 }
 
+.set-group {
+  display: grid;
+  gap: 6px;
+}
+
 .set-input {
   min-height: 44px;
   border: 1px solid transparent;
@@ -710,6 +808,55 @@
 .set-input:focus {
   outline: none;
   border-color: var(--input-focus);
+}
+
+.drop-toggle-btn {
+  min-height: 44px;
+  border: 1px solid var(--card-border);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.drop-board {
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  padding: 6px;
+  display: grid;
+  gap: 6px;
+}
+
+.drop-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr) 28px;
+  gap: 6px;
+  align-items: center;
+}
+
+.drop-label {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-sub);
+}
+
+.drop-input {
+  min-height: 38px;
+  font-size: 0.94rem;
+}
+
+.drop-remove-btn {
+  min-height: 38px;
+  border: 1px solid var(--card-border);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 1rem;
+  cursor: pointer;
 }
 
 .set-actions {
@@ -751,6 +898,10 @@ input:focus-visible {
 @media (max-width: 620px) {
   .plan-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quick-actions {
+    grid-template-columns: 1fr;
   }
 }
 

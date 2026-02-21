@@ -55,6 +55,13 @@ type WorkoutSet = {
   id: string;
   weight: string;
   reps: string;
+  dropSets: DropSet[];
+};
+
+type DropSet = {
+  id: string;
+  weight: string;
+  reps: string;
 };
 
 type SessionExercise = {
@@ -68,6 +75,7 @@ type SessionByPlan = Record<DayPlanId, SessionExercise[]>;
 type SelectedExerciseByPlan = Record<DayPlanId, string>;
 
 type SetField = "weight" | "reps";
+type DropSetField = "weight" | "reps";
 
 const STORAGE_KEY = "gym-check-session-v4";
 const DEFAULT_REST_SECONDS = 90;
@@ -149,11 +157,20 @@ function sanitizeNumber(value: unknown, maxDigits: number): string {
     .slice(0, maxDigits);
 }
 
-function createSet(weight = "", reps = ""): WorkoutSet {
+function createDropSet(weight = "", reps = ""): DropSet {
   return {
     id: createId(),
     weight: sanitizeNumber(weight, 3),
     reps: sanitizeNumber(reps, 2),
+  };
+}
+
+function createSet(weight = "", reps = "", dropSets?: DropSet[]): WorkoutSet {
+  return {
+    id: createId(),
+    weight: sanitizeNumber(weight, 3),
+    reps: sanitizeNumber(reps, 2),
+    dropSets: dropSets && dropSets.length > 0 ? dropSets : [],
   };
 }
 
@@ -194,12 +211,22 @@ function normalizeExercises(input: unknown): SessionExercise[] {
       const canonicalName = getExerciseDefinition(name)?.name ?? name;
 
       const sets = Array.isArray(item?.sets)
-        ? item.sets.map((setItem: { weight?: unknown; reps?: unknown }) =>
-            createSet(
+        ? item.sets.map((setItem: { weight?: unknown; reps?: unknown; dropSets?: unknown }) => {
+            const normalizedDropSets = Array.isArray(setItem?.dropSets)
+              ? setItem.dropSets.map((dropItem: { weight?: unknown; reps?: unknown }) =>
+                  createDropSet(
+                    typeof dropItem?.weight === "string" ? dropItem.weight : String(dropItem?.weight ?? ""),
+                    typeof dropItem?.reps === "string" ? dropItem.reps : String(dropItem?.reps ?? ""),
+                  ),
+                )
+              : [];
+
+            return createSet(
               typeof setItem?.weight === "string" ? setItem.weight : String(setItem?.weight ?? ""),
               typeof setItem?.reps === "string" ? setItem.reps : String(setItem?.reps ?? ""),
-            ),
-          )
+              normalizedDropSets,
+            );
+          })
         : [createSet()];
 
       return {
@@ -360,6 +387,11 @@ export default function App() {
     cardio: exercisesByPlan.cardio[0],
     custom: exercisesByPlan.custom[0] ?? "",
   });
+  const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
+  const [isCustomBuilderOpen, setIsCustomBuilderOpen] = useState(false);
+  const [isRestPanelOpen, setIsRestPanelOpen] = useState(false);
+  const [restMinutesInput, setRestMinutesInput] = useState(() => String(Math.floor(DEFAULT_REST_SECONDS / 60)));
+  const [restSecondsInput, setRestSecondsInput] = useState(() => String(DEFAULT_REST_SECONDS % 60).padStart(2, "0"));
   const [customSearch, setCustomSearch] = useState("");
   const [customFilter, setCustomFilter] = useState<CustomLibraryFilter>("all");
   const [restSeconds, setRestSeconds] = useState<number | null>(null);
@@ -472,6 +504,12 @@ export default function App() {
     }));
   }
 
+  function selectPlan(planId: DayPlanId) {
+    setSelectedPlanId(planId);
+    setIsExercisePickerOpen(false);
+    setIsCustomBuilderOpen(false);
+  }
+
   function toggleExercise(exerciseId: string) {
     updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) =>
@@ -497,6 +535,76 @@ export default function App() {
     );
   }
 
+  function addDropSet(exerciseId: string, setId: string) {
+    updateExercisesForPlan(selectedPlanId, (prev) =>
+      prev.map((exercise) => {
+        if (exercise.id !== exerciseId) return exercise;
+
+        return {
+          ...exercise,
+          sets: exercise.sets.map((setItem) => {
+            if (setItem.id !== setId) return setItem;
+
+            const lastDrop = setItem.dropSets[setItem.dropSets.length - 1];
+
+            return {
+              ...setItem,
+              dropSets: [...setItem.dropSets, createDropSet(lastDrop?.weight ?? "", lastDrop?.reps ?? "")],
+            };
+          }),
+        };
+      }),
+    );
+    tg?.HapticFeedback?.impactOccurred?.("light");
+  }
+
+  function updateDropSetValue(
+    exerciseId: string,
+    setId: string,
+    dropSetId: string,
+    field: DropSetField,
+    value: string,
+  ) {
+    const sanitized = sanitizeNumber(value, field === "weight" ? 3 : 2);
+
+    updateExercisesForPlan(selectedPlanId, (prev) =>
+      prev.map((exercise) => {
+        if (exercise.id !== exerciseId) return exercise;
+
+        return {
+          ...exercise,
+          sets: exercise.sets.map((setItem) => {
+            if (setItem.id !== setId) return setItem;
+
+            return {
+              ...setItem,
+              dropSets: setItem.dropSets.map((dropSet) =>
+                dropSet.id === dropSetId ? { ...dropSet, [field]: sanitized } : dropSet,
+              ),
+            };
+          }),
+        };
+      }),
+    );
+  }
+
+  function removeDropSet(exerciseId: string, setId: string, dropSetId: string) {
+    updateExercisesForPlan(selectedPlanId, (prev) =>
+      prev.map((exercise) => {
+        if (exercise.id !== exerciseId) return exercise;
+
+        return {
+          ...exercise,
+          sets: exercise.sets.map((setItem) =>
+            setItem.id === setId
+              ? { ...setItem, dropSets: setItem.dropSets.filter((dropSet) => dropSet.id !== dropSetId) }
+              : setItem,
+          ),
+        };
+      }),
+    );
+  }
+
   function addSet(exerciseId: string) {
     updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) => {
@@ -511,9 +619,7 @@ export default function App() {
         };
       }),
     );
-
-    setRestSeconds(DEFAULT_REST_SECONDS);
-    setNotice(`Подход добавлен • отдых ${formatSeconds(DEFAULT_REST_SECONDS)}`);
+    setNotice("Подход добавлен");
     tg?.HapticFeedback?.impactOccurred?.("light");
   }
 
@@ -571,7 +677,31 @@ export default function App() {
     }
 
     setNotice(`Добавлено: ${exerciseName}`);
+    setIsExercisePickerOpen(false);
     tg?.HapticFeedback?.impactOccurred?.("medium");
+  }
+
+  function startRestTimer() {
+    const minutes = Math.min(Number(sanitizeNumber(restMinutesInput, 2) || "0"), 59);
+    const seconds = Math.min(Number(sanitizeNumber(restSecondsInput, 2) || "0"), 59);
+    const totalSeconds = minutes * 60 + seconds;
+
+    if (totalSeconds <= 0) {
+      setNotice("Укажи время отдыха");
+      return;
+    }
+
+    setRestSeconds(totalSeconds);
+    setRestMinutesInput(String(minutes));
+    setRestSecondsInput(String(seconds).padStart(2, "0"));
+    setNotice(`Отдых запущен: ${formatSeconds(totalSeconds)}`);
+    setIsRestPanelOpen(false);
+    tg?.HapticFeedback?.impactOccurred?.("medium");
+  }
+
+  function stopRestTimer() {
+    setRestSeconds(null);
+    setNotice("Таймер отдыха остановлен");
   }
 
   return (
@@ -615,7 +745,7 @@ export default function App() {
               key={plan.id}
               type="button"
               className={`plan-tab ${selectedPlanId === plan.id ? "is-active" : ""}`}
-              onClick={() => setSelectedPlanId(plan.id)}
+              onClick={() => selectPlan(plan.id)}
             >
               <span className="tab-title">{plan.title}</span>
               <span className="tab-count">{setCountsByPlan[plan.id]}</span>
@@ -633,8 +763,39 @@ export default function App() {
           <p className="plan-hero-subtitle">{selectedPlan.subtitle}</p>
         </section>
 
-        {selectedPlanId === "custom" ? (
-          <section className="custom-program-builder" aria-label="Конструктор своей программы">
+        <section className="quick-actions" aria-label="Быстрые действия">
+          {selectedPlanId === "custom" ? (
+            <button
+              type="button"
+              className={`action-btn ${isCustomBuilderOpen ? "is-active" : ""}`}
+              onClick={() => setIsCustomBuilderOpen((prev) => !prev)}
+            >
+              <span>База упражнений</span>
+              <span className="action-hint">{isCustomBuilderOpen ? "Скрыть" : "Открыть"}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`action-btn ${isExercisePickerOpen ? "is-active" : ""}`}
+              onClick={() => setIsExercisePickerOpen((prev) => !prev)}
+            >
+              <span>Добавить упражнение</span>
+              <span className="action-hint">{isExercisePickerOpen ? "Скрыть" : "Открыть"}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
+            onClick={() => setIsRestPanelOpen((prev) => !prev)}
+          >
+            <span>Отдых</span>
+            <span className="action-hint">{restSeconds !== null ? formatSeconds(restSeconds) : "Мин/сек"}</span>
+          </button>
+        </section>
+
+        {selectedPlanId === "custom" && isCustomBuilderOpen ? (
+          <section className="custom-program-builder action-drawer" aria-label="Конструктор своей программы">
             <div className="builder-head">
               <p className="builder-title">База упражнений</p>
               <p className="builder-subtitle">Выбери упражнения, которые хочешь добавить в свою программу</p>
@@ -711,8 +872,10 @@ export default function App() {
               )}
             </div>
           </section>
-        ) : (
-          <section className="exercise-picker" aria-label="Добавление упражнения">
+        ) : null}
+
+        {selectedPlanId !== "custom" && isExercisePickerOpen ? (
+          <section className="exercise-picker action-drawer" aria-label="Добавление упражнения">
             <label htmlFor="exercise-select">Упражнения для: {selectedPlan.title}</label>
             <div className="picker-row">
               <select
@@ -737,27 +900,59 @@ export default function App() {
               </button>
             </div>
           </section>
-        )}
+        ) : null}
 
         {notice ? <p className="inline-notice">{notice}</p> : null}
 
-        {restSeconds !== null ? (
-          <section className="rest-timer" aria-label="Таймер отдыха">
-            <div>
+        {isRestPanelOpen || restSeconds !== null ? (
+          <section className="rest-drawer action-drawer" aria-label="Настройки отдыха">
+            <div className="rest-drawer-head">
               <p className="rest-label">Отдых</p>
-              <p className="rest-value">{formatSeconds(restSeconds)}</p>
+              <p className="rest-value">{restSeconds !== null ? formatSeconds(restSeconds) : "Не запущен"}</p>
             </div>
+
+            <div className="rest-input-grid">
+              <label>
+                Мин
+                <input
+                  className="rest-time-input"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="0"
+                  value={restMinutesInput}
+                  onChange={(event) => setRestMinutesInput(sanitizeNumber(event.target.value, 2))}
+                />
+              </label>
+              <label>
+                Сек
+                <input
+                  className="rest-time-input"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="00"
+                  value={restSecondsInput}
+                  onChange={(event) => setRestSecondsInput(sanitizeNumber(event.target.value, 2))}
+                />
+              </label>
+            </div>
+
             <div className="rest-actions">
               <button
                 type="button"
                 className="rest-btn"
-                onClick={() => setRestSeconds((prev) => (prev === null ? DEFAULT_REST_SECONDS : Math.min(prev + 30, 600)))}
+                onClick={startRestTimer}
               >
-                +30с
+                Запустить
               </button>
-              <button type="button" className="rest-btn is-ghost" onClick={() => setRestSeconds(null)}>
-                Пропустить
-              </button>
+              {restSeconds !== null ? (
+                <button type="button" className="rest-btn is-ghost" onClick={stopRestTimer}>
+                  Остановить
+                </button>
+              ) : (
+                <button type="button" className="rest-btn is-ghost" onClick={() => setIsRestPanelOpen(false)}>
+                  Скрыть
+                </button>
+              )}
             </div>
           </section>
         ) : null}
@@ -827,27 +1022,70 @@ export default function App() {
                         <span>№</span>
                         <span>вес (кг)</span>
                         <span>повт.</span>
+                        <span>дроп</span>
                       </div>
 
                       {exercise.sets.map((setItem, index) => (
-                        <div key={setItem.id} className="set-row">
-                          <span className="set-index">{index + 1}</span>
-                          <input
-                            className="set-input"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            placeholder="0"
-                            value={setItem.weight}
-                            onChange={(event) => updateSetValue(exercise.id, setItem.id, "weight", event.target.value)}
-                          />
-                          <input
-                            className="set-input"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            placeholder="0"
-                            value={setItem.reps}
-                            onChange={(event) => updateSetValue(exercise.id, setItem.id, "reps", event.target.value)}
-                          />
+                        <div key={setItem.id} className="set-group">
+                          <div className="set-row">
+                            <span className="set-index">{index + 1}</span>
+                            <input
+                              className="set-input"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              placeholder="0"
+                              value={setItem.weight}
+                              onChange={(event) => updateSetValue(exercise.id, setItem.id, "weight", event.target.value)}
+                            />
+                            <input
+                              className="set-input"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              placeholder="0"
+                              value={setItem.reps}
+                              onChange={(event) => updateSetValue(exercise.id, setItem.id, "reps", event.target.value)}
+                            />
+                            <button type="button" className="drop-toggle-btn" onClick={() => addDropSet(exercise.id, setItem.id)}>
+                              дроп+
+                            </button>
+                          </div>
+
+                          {setItem.dropSets.length > 0 ? (
+                            <div className="drop-board">
+                              {setItem.dropSets.map((dropSet, dropIndex) => (
+                                <div key={dropSet.id} className="drop-row">
+                                  <span className="drop-label">D{dropIndex + 1}</span>
+                                  <input
+                                    className="set-input drop-input"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    placeholder="0"
+                                    value={dropSet.weight}
+                                    onChange={(event) =>
+                                      updateDropSetValue(exercise.id, setItem.id, dropSet.id, "weight", event.target.value)
+                                    }
+                                  />
+                                  <input
+                                    className="set-input drop-input"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    placeholder="0"
+                                    value={dropSet.reps}
+                                    onChange={(event) =>
+                                      updateDropSetValue(exercise.id, setItem.id, dropSet.id, "reps", event.target.value)
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    className="drop-remove-btn"
+                                    onClick={() => removeDropSet(exercise.id, setItem.id, dropSet.id)}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       ))}
 
