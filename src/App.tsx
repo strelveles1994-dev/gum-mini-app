@@ -36,7 +36,7 @@ type DayPlanId = "upper" | "lower" | "cardio" | "custom";
 type CustomLibraryFilter = "all" | BasePlanId;
 type AppScreen = "home" | "workout" | "profile";
 type IconName = DayPlanId | "home" | "profile" | "add";
-type MeasurementIconName = "date" | "weight" | "waist" | "hips" | "fat";
+type MeasurementIconName = "date" | "height" | "weight" | "chest" | "waist" | "glutes" | "thighs" | "belly";
 
 type DayPlan = {
   id: DayPlanId;
@@ -82,25 +82,28 @@ type CalendarDay = {
 type MeasurementEntry = {
   id: string;
   date: string;
+  height: string;
   weight: string;
+  chest: string;
   waist: string;
-  hips: string;
-  fat: string;
+  glutes: string;
+  thighs: string;
+  belly: string;
 };
 
 type ProfileState = {
-  goal: string;
-  weight: string;
   height: string;
-  age: string;
+  weight: string;
+  chest: string;
   waist: string;
-  hips: string;
-  fat: string;
+  glutes: string;
+  thighs: string;
+  belly: string;
   measurements: MeasurementEntry[];
 };
 
 const STORAGE_KEY = "gym-check-session-v7";
-const PROFILE_STORAGE_KEY = "gym-check-profile-v2";
+const PROFILE_STORAGE_KEY = "gym-check-profile-v3";
 const DEFAULT_REST_SECONDS = 90;
 
 const customFilterOptions: { id: CustomLibraryFilter; label: string }[] = [
@@ -294,13 +297,13 @@ function loadSessionByPlan(): SessionByPlan {
 
 function buildDefaultProfile(): ProfileState {
   return {
-    goal: "",
-    weight: "",
     height: "",
-    age: "",
+    weight: "",
+    chest: "",
     waist: "",
-    hips: "",
-    fat: "",
+    glutes: "",
+    thighs: "",
+    belly: "",
     measurements: [],
   };
 }
@@ -327,22 +330,25 @@ function loadProfileState(): ProfileState {
         return {
           id: createId(),
           date,
+          height: sanitizeNumber(item.height, 3),
           weight: sanitizeNumber(item.weight, 3),
+          chest: sanitizeNumber(item.chest, 3),
           waist: sanitizeNumber(item.waist, 3),
-          hips: sanitizeNumber(item.hips, 3),
-          fat: sanitizeNumber(item.fat, 2),
+          glutes: sanitizeNumber(item.glutes ?? item.hips, 3),
+          thighs: sanitizeNumber(item.thighs, 3),
+          belly: sanitizeNumber(item.belly ?? item.fat, 3),
         };
       })
       .filter((entry): entry is MeasurementEntry => Boolean(entry));
 
     return {
-      goal: typeof parsed.goal === "string" ? parsed.goal.slice(0, 140) : "",
-      weight: sanitizeNumber(parsed.weight, 3),
       height: sanitizeNumber(parsed.height, 3),
-      age: sanitizeNumber(parsed.age, 2),
+      weight: sanitizeNumber(parsed.weight, 3),
+      chest: sanitizeNumber(parsed.chest, 3),
       waist: sanitizeNumber(parsed.waist, 3),
-      hips: sanitizeNumber(parsed.hips, 3),
-      fat: sanitizeNumber(parsed.fat, 2),
+      glutes: sanitizeNumber(parsed.glutes ?? parsed.hips, 3),
+      thighs: sanitizeNumber(parsed.thighs, 3),
+      belly: sanitizeNumber(parsed.belly ?? parsed.fat, 3),
       measurements,
     };
   } catch {
@@ -504,6 +510,26 @@ function MeasurementIcon({ name, className }: { name: MeasurementIconName; class
     );
   }
 
+  if (name === "height") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <path d="M12 4.3V19.7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M9.5 6.5L12 4.3L14.5 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M9.5 17.5L12 19.7L14.5 17.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (name === "chest") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <path d="M7 6.6C8.1 7.9 9.4 8.6 12 8.6C14.6 8.6 15.9 7.9 17 6.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M6.4 11.2C7.5 12.4 9.2 13.2 12 13.2C14.8 13.2 16.5 12.4 17.6 11.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M8 18.2C8.8 16.2 10 15.2 12 15.2C14 15.2 15.2 16.2 16 18.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
   if (name === "waist") {
     return (
       <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -514,7 +540,7 @@ function MeasurementIcon({ name, className }: { name: MeasurementIconName; class
     );
   }
 
-  if (name === "hips") {
+  if (name === "glutes") {
     return (
       <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
         <path d="M8.5 6.2C8.5 8 9.4 9.6 12 9.6C14.6 9.6 15.5 8 15.5 6.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -525,12 +551,21 @@ function MeasurementIcon({ name, className }: { name: MeasurementIconName; class
     );
   }
 
+  if (name === "thighs") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <path d="M9 5.8L11.3 9.8L9.5 13.2L10.8 18.2H13.4L12.1 13.2L14.4 9.8L13 5.8H9Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      <circle cx="12" cy="11.3" r="6.1" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M16 6.8C16.9 7.8 17.4 9.1 17.4 10.4C17.4 13.7 14.7 16.4 11.4 16.4C10.1 16.4 8.8 15.9 7.8 15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M9.7 8.3C10.4 7.8 11.2 7.5 12 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M7.4 18.4H16.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M8.3 6.8C9.4 8.3 10.2 9.4 10.2 11.1C10.2 13 8.7 14.5 6.8 14.5C4.9 14.5 3.4 13 3.4 11.1C3.4 9.4 4.2 8.3 5.3 6.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M18.7 6.8C19.8 8.3 20.6 9.4 20.6 11.1C20.6 13 19.1 14.5 17.2 14.5C15.3 14.5 13.8 13 13.8 11.1C13.8 9.4 14.6 8.3 15.7 6.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M6.8 15.6V18.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M17.2 15.6V18.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M6.8 18.2H17.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -571,10 +606,13 @@ export default function App() {
   const latestMeasurement = profile.measurements[0] ?? null;
   const summaryMeasurement = {
     date: latestMeasurement?.date ?? "--.--",
+    height: latestMeasurement?.height || profile.height,
     weight: latestMeasurement?.weight || profile.weight,
+    chest: latestMeasurement?.chest || profile.chest,
     waist: latestMeasurement?.waist || profile.waist,
-    hips: latestMeasurement?.hips || profile.hips,
-    fat: latestMeasurement?.fat || profile.fat,
+    glutes: latestMeasurement?.glutes || profile.glutes,
+    thighs: latestMeasurement?.thighs || profile.thighs,
+    belly: latestMeasurement?.belly || profile.belly,
   };
 
   const normalizedCustomSearch = customSearch.trim().toLowerCase();
@@ -940,12 +978,20 @@ export default function App() {
   function updateProfileField(field: keyof Omit<ProfileState, "measurements">, value: string) {
     setProfile((prev) => ({
       ...prev,
-      [field]: field === "goal" ? value.slice(0, 140) : sanitizeNumber(value, field === "age" || field === "fat" ? 2 : 3),
+      [field]: sanitizeNumber(value, 3),
     }));
   }
 
   function addMeasurement() {
-    if (!profile.weight && !profile.waist && !profile.hips && !profile.fat) {
+    if (
+      !profile.height &&
+      !profile.weight &&
+      !profile.chest &&
+      !profile.waist &&
+      !profile.glutes &&
+      !profile.thighs &&
+      !profile.belly
+    ) {
       setNotice("Заполни хотя бы один параметр замера");
       return;
     }
@@ -954,10 +1000,13 @@ export default function App() {
     const entry: MeasurementEntry = {
       id: createId(),
       date,
+      height: profile.height,
       weight: profile.weight,
+      chest: profile.chest,
       waist: profile.waist,
-      hips: profile.hips,
-      fat: profile.fat,
+      glutes: profile.glutes,
+      thighs: profile.thighs,
+      belly: profile.belly,
     };
 
     setProfile((prev) => ({
@@ -996,6 +1045,172 @@ export default function App() {
                 )}
               </button>
             </header>
+
+            <section className="measurements-card">
+              <div className="measurements-head">
+                <p className="measurements-title">Замеры</p>
+                <button
+                  type="button"
+                  className="measurements-add-btn"
+                  onClick={addMeasurement}
+                  aria-label="Добавить замер"
+                >
+                  <AppIcon name="add" className="app-icon app-icon-sm" />
+                </button>
+              </div>
+
+              <div className="measurements-summary" role="list" aria-label="Последний замер">
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="date" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{summaryMeasurement.date}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="height" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.height, " см")}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="weight" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.weight, " кг")}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="chest" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.chest, " см")}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="waist" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.waist, " см")}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="glutes" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.glutes, " см")}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="thighs" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.thighs, " см")}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="belly" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.belly, " см")}</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className={`measurements-toggle ${isMeasurementsExpanded ? "is-open" : ""}`}
+                onClick={() => setIsMeasurementsExpanded((prev) => !prev)}
+                aria-expanded={isMeasurementsExpanded}
+                aria-label={isMeasurementsExpanded ? "Скрыть подробности замеров" : "Показать подробности замеров"}
+              >
+                <span className="measurements-toggle-arrow" aria-hidden="true">
+                  ▾
+                </span>
+              </button>
+
+              {isMeasurementsExpanded ? (
+                <div className="measurements-details action-drawer">
+                  <div className="measurement-inputs-grid">
+                    <label>
+                      <span>Рост</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.height}
+                        placeholder="см"
+                        onChange={(event) => updateProfileField("height", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Вес</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.weight}
+                        placeholder="кг"
+                        onChange={(event) => updateProfileField("weight", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Грудь</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.chest}
+                        placeholder="см"
+                        onChange={(event) => updateProfileField("chest", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Талия</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.waist}
+                        placeholder="см"
+                        onChange={(event) => updateProfileField("waist", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Ягодицы</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.glutes}
+                        placeholder="см"
+                        onChange={(event) => updateProfileField("glutes", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Бедра</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.thighs}
+                        placeholder="см"
+                        onChange={(event) => updateProfileField("thighs", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Живот</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.belly}
+                        placeholder="см"
+                        onChange={(event) => updateProfileField("belly", event.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <button type="button" className="secondary-btn" onClick={addMeasurement}>
+                    Сохранить замер
+                  </button>
+
+                  <div className="measurement-list">
+                    {profile.measurements.length === 0 ? (
+                      <p className="empty-state">История замеров пока пустая.</p>
+                    ) : (
+                      profile.measurements.map((entry) => (
+                        <article key={entry.id} className="measurement-row">
+                          <div className="measurement-date">{entry.date}</div>
+                          <div className="measurement-values measurement-values-extended">
+                            <span>Рост: {formatMetric(entry.height, " см")}</span>
+                            <span>Вес: {formatMetric(entry.weight, " кг")}</span>
+                            <span>Грудь: {formatMetric(entry.chest, " см")}</span>
+                            <span>Талия: {formatMetric(entry.waist, " см")}</span>
+                            <span>Ягодицы: {formatMetric(entry.glutes, " см")}</span>
+                            <span>Бедра: {formatMetric(entry.thighs, " см")}</span>
+                            <span>Живот: {formatMetric(entry.belly, " см")}</span>
+                          </div>
+                          <button type="button" className="ghost-btn" onClick={() => removeMeasurement(entry.id)}>
+                            Удалить
+                          </button>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </section>
 
             <section className="home-card">
               <p className="home-card-title">Начни новую тренировку</p>
@@ -1462,7 +1677,7 @@ export default function App() {
 
               <div className="head-copy">
                 <p className="screen-kicker">Профиль</p>
-                <h2 className="screen-title-sm">Настройки и замеры</h2>
+                <h2 className="screen-title-sm">Аккаунт</h2>
               </div>
 
               <button type="button" className="icon-btn" onClick={() => openWorkout(selectedPlanId)} aria-label="Открыть тренировку">
@@ -1482,174 +1697,13 @@ export default function App() {
 
                 <div className="profile-copy">
                   <p className="profile-name">{userName}</p>
-                  <p className="profile-note">Заполни цель и базовые параметры</p>
+                  <p className="profile-note">Замеры и прогресс доступны на главной странице</p>
                 </div>
               </div>
 
-              <label className="profile-field">
-                <span>Цель тренировок</span>
-                <textarea
-                  className="profile-goal-input"
-                  value={profile.goal}
-                  maxLength={140}
-                  placeholder="Например: стройное тело, повышение выносливости, рост силы"
-                  onChange={(event) => updateProfileField("goal", event.target.value)}
-                />
-              </label>
-
-              <div className="metric-grid metric-grid-main">
-                <label>
-                  <span>Вес</span>
-                  <input
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={profile.weight}
-                    placeholder="кг"
-                    onChange={(event) => updateProfileField("weight", event.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Рост</span>
-                  <input
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={profile.height}
-                    placeholder="см"
-                    onChange={(event) => updateProfileField("height", event.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Возраст</span>
-                  <input
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={profile.age}
-                    placeholder="лет"
-                    onChange={(event) => updateProfileField("age", event.target.value)}
-                  />
-                </label>
-              </div>
-            </section>
-
-            <section className="measurements-card">
-              <div className="measurements-head">
-                <p className="measurements-title">Замеры</p>
-                <button
-                  type="button"
-                  className="measurements-add-btn"
-                  onClick={addMeasurement}
-                  aria-label="Добавить замер"
-                >
-                  <AppIcon name="add" className="app-icon app-icon-sm" />
-                </button>
-              </div>
-
-              <div className="measurements-summary" role="list" aria-label="Последний замер">
-                <div className="measurement-item" role="listitem">
-                  <MeasurementIcon name="date" className="measurement-item-icon" />
-                  <span className="measurement-item-value">{summaryMeasurement.date}</span>
-                </div>
-                <div className="measurement-item" role="listitem">
-                  <MeasurementIcon name="weight" className="measurement-item-icon" />
-                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.weight, " кг")}</span>
-                </div>
-                <div className="measurement-item" role="listitem">
-                  <MeasurementIcon name="waist" className="measurement-item-icon" />
-                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.waist, " см")}</span>
-                </div>
-                <div className="measurement-item" role="listitem">
-                  <MeasurementIcon name="hips" className="measurement-item-icon" />
-                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.hips, " см")}</span>
-                </div>
-                <div className="measurement-item" role="listitem">
-                  <MeasurementIcon name="fat" className="measurement-item-icon" />
-                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.fat, "%")}</span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className={`measurements-toggle ${isMeasurementsExpanded ? "is-open" : ""}`}
-                onClick={() => setIsMeasurementsExpanded((prev) => !prev)}
-                aria-expanded={isMeasurementsExpanded}
-                aria-label={isMeasurementsExpanded ? "Скрыть подробности замеров" : "Показать подробности замеров"}
-              >
-                <span className="measurements-toggle-arrow" aria-hidden="true">
-                  ▾
-                </span>
-              </button>
-
-              {isMeasurementsExpanded ? (
-                <div className="measurements-details action-drawer">
-                  <div className="measurement-inputs-grid">
-                    <label>
-                      <span>Вес</span>
-                      <input
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={profile.weight}
-                        placeholder="кг"
-                        onChange={(event) => updateProfileField("weight", event.target.value)}
-                      />
-                    </label>
-                    <label>
-                      <span>Талия</span>
-                      <input
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={profile.waist}
-                        placeholder="см"
-                        onChange={(event) => updateProfileField("waist", event.target.value)}
-                      />
-                    </label>
-                    <label>
-                      <span>Ягодицы</span>
-                      <input
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={profile.hips}
-                        placeholder="см"
-                        onChange={(event) => updateProfileField("hips", event.target.value)}
-                      />
-                    </label>
-                    <label>
-                      <span>Жир</span>
-                      <input
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={profile.fat}
-                        placeholder="%"
-                        onChange={(event) => updateProfileField("fat", event.target.value)}
-                      />
-                    </label>
-                  </div>
-
-                  <button type="button" className="secondary-btn" onClick={addMeasurement}>
-                    Сохранить замер
-                  </button>
-
-                  <div className="measurement-list">
-                    {profile.measurements.length === 0 ? (
-                      <p className="empty-state">История замеров пока пустая.</p>
-                    ) : (
-                      profile.measurements.map((entry) => (
-                        <article key={entry.id} className="measurement-row">
-                          <div className="measurement-date">{entry.date}</div>
-                          <div className="measurement-values">
-                            <span>{formatMetric(entry.weight, " кг")}</span>
-                            <span>{formatMetric(entry.waist, " см")}</span>
-                            <span>{formatMetric(entry.hips, " см")}</span>
-                            <span>{formatMetric(entry.fat, "%")}</span>
-                          </div>
-                          <button type="button" className="ghost-btn" onClick={() => removeMeasurement(entry.id)}>
-                            Удалить
-                          </button>
-                        </article>
-                      ))
-                    )}
-                  </div>
-                </div>
-              ) : null}
+              <p className="profile-hint">
+                Для новых замеров используй кнопку <strong>+</strong> в блоке <strong>Замеры</strong> на главной.
+              </p>
             </section>
 
             {notice ? <p className="inline-notice">{notice}</p> : null}
