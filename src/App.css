@@ -1044,6 +1044,121 @@
   width: 100%;
 }
 
+.measurements-card {
+  background: color-mix(in srgb, var(--panel-bg) 80%, #ffffff 20%);
+  gap: 9px;
+}
+
+.measurements-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.measurements-title {
+  margin: 0;
+  font-size: 1.04rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.measurements-add-btn {
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #0a1627, #07101c);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  justify-self: center;
+}
+
+.measurements-summary {
+  border-radius: 22px;
+  background: var(--panel-elevated);
+  border: 1px solid var(--panel-border);
+  padding: 10px 8px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.measurement-item {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+}
+
+.measurement-item-icon {
+  width: 24px;
+  height: 24px;
+  color: color-mix(in srgb, var(--text-main) 92%, #1a253a);
+}
+
+.measurement-item-value {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--text-main) 86%, #2d3a55);
+  white-space: nowrap;
+}
+
+.measurements-toggle {
+  min-height: 50px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(160deg, #081425, #060e1a);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.measurements-toggle-arrow {
+  display: inline-block;
+  font-size: 1.35rem;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.measurements-toggle.is-open .measurements-toggle-arrow {
+  transform: rotate(180deg);
+}
+
+.measurements-details {
+  display: grid;
+  gap: 9px;
+  padding-top: 2px;
+}
+
+.measurement-inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.measurement-inputs-grid label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-sub);
+}
+
+.measurement-inputs-grid input {
+  min-height: 40px;
+  border: 1px solid var(--panel-border);
+  border-radius: 11px;
+  background: var(--input-bg);
+  color: var(--text-main);
+  text-align: center;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
 .measurement-list {
   display: grid;
   gap: 8px;

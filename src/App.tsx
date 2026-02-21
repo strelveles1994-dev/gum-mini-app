@@ -36,6 +36,7 @@ type DayPlanId = "upper" | "lower" | "cardio" | "custom";
 type CustomLibraryFilter = "all" | BasePlanId;
 type AppScreen = "home" | "workout" | "profile";
 type IconName = DayPlanId | "home" | "profile" | "add";
+type MeasurementIconName = "date" | "weight" | "waist" | "hips" | "fat";
 
 type DayPlan = {
   id: DayPlanId;
@@ -481,6 +482,59 @@ function AppIcon({ name, className }: { name: IconName; className?: string }) {
   );
 }
 
+function MeasurementIcon({ name, className }: { name: MeasurementIconName; className?: string }) {
+  if (name === "date") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <rect x="3.8" y="5.4" width="16.4" height="14.8" rx="3.1" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M7.8 3.8V7.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M16.2 3.8V7.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M3.8 10.1H20.2" stroke="currentColor" strokeWidth="1.6" />
+      </svg>
+    );
+  }
+
+  if (name === "weight") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <rect x="4.1" y="5.4" width="15.8" height="13.2" rx="3.4" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M12 9.2L15.4 10.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="12" cy="9.2" r="1.2" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "waist") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <path d="M8.6 4.8C9.5 6.1 10.6 6.8 12 6.8C13.4 6.8 14.5 6.1 15.4 4.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M8 9.5C8 9.5 9.2 11 12 11C14.8 11 16 9.5 16 9.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M6.8 19.2C7.8 16.4 9.3 14.8 12 14.8C14.7 14.8 16.2 16.4 17.2 19.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (name === "hips") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <path d="M8.5 6.2C8.5 8 9.4 9.6 12 9.6C14.6 9.6 15.5 8 15.5 6.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M6.5 11.4C6.5 14.9 8.5 18 12 18C15.5 18 17.5 14.9 17.5 11.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M3.8 13.6C5.3 13.6 6.3 12.7 6.3 11.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M20.2 13.6C18.7 13.6 17.7 12.7 17.7 11.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <circle cx="12" cy="11.3" r="6.1" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M16 6.8C16.9 7.8 17.4 9.1 17.4 10.4C17.4 13.7 14.7 16.4 11.4 16.4C10.1 16.4 8.8 15.9 7.8 15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M9.7 8.3C10.4 7.8 11.2 7.5 12 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M7.4 18.4H16.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function App() {
   const tg = useMemo(() => window.Telegram?.WebApp, []);
   const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "Спортсмен";
@@ -501,6 +555,7 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [customSearch, setCustomSearch] = useState("");
   const [customFilter, setCustomFilter] = useState<CustomLibraryFilter>("all");
+  const [isMeasurementsExpanded, setIsMeasurementsExpanded] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey(new Date()));
   const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
     upper: exercisesByPlan.upper[0] ?? "",
@@ -513,6 +568,14 @@ export default function App() {
   const activeExercises = sessionByPlan[selectedPlanId];
   const weekDays = useMemo(() => buildCalendarWeek(new Date()), []);
   const selectedCalendarDay = weekDays.find((day) => day.key === selectedDateKey) ?? weekDays[0] ?? null;
+  const latestMeasurement = profile.measurements[0] ?? null;
+  const summaryMeasurement = {
+    date: latestMeasurement?.date ?? "--.--",
+    weight: latestMeasurement?.weight || profile.weight,
+    waist: latestMeasurement?.waist || profile.waist,
+    hips: latestMeasurement?.hips || profile.hips,
+    fat: latestMeasurement?.fat || profile.fat,
+  };
 
   const normalizedCustomSearch = customSearch.trim().toLowerCase();
   const customExerciseNameSet = useMemo(
@@ -1470,69 +1533,123 @@ export default function App() {
 
             <section className="measurements-card">
               <div className="measurements-head">
-                <p className="section-title">Замеры</p>
-                <button type="button" className="icon-btn" onClick={addMeasurement} aria-label="Добавить замер">
+                <p className="measurements-title">Замеры</p>
+                <button
+                  type="button"
+                  className="measurements-add-btn"
+                  onClick={addMeasurement}
+                  aria-label="Добавить замер"
+                >
                   <AppIcon name="add" className="app-icon app-icon-sm" />
                 </button>
               </div>
 
-              <div className="metric-grid metric-grid-measure">
-                <label>
-                  <span>Талия</span>
-                  <input
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={profile.waist}
-                    placeholder="см"
-                    onChange={(event) => updateProfileField("waist", event.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Ягодицы</span>
-                  <input
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={profile.hips}
-                    placeholder="см"
-                    onChange={(event) => updateProfileField("hips", event.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Жир</span>
-                  <input
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={profile.fat}
-                    placeholder="%"
-                    onChange={(event) => updateProfileField("fat", event.target.value)}
-                  />
-                </label>
+              <div className="measurements-summary" role="list" aria-label="Последний замер">
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="date" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{summaryMeasurement.date}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="weight" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.weight, " кг")}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="waist" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.waist, " см")}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="hips" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.hips, " см")}</span>
+                </div>
+                <div className="measurement-item" role="listitem">
+                  <MeasurementIcon name="fat" className="measurement-item-icon" />
+                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.fat, "%")}</span>
+                </div>
               </div>
 
-              <button type="button" className="secondary-btn" onClick={addMeasurement}>
-                Сохранить замер
+              <button
+                type="button"
+                className={`measurements-toggle ${isMeasurementsExpanded ? "is-open" : ""}`}
+                onClick={() => setIsMeasurementsExpanded((prev) => !prev)}
+                aria-expanded={isMeasurementsExpanded}
+                aria-label={isMeasurementsExpanded ? "Скрыть подробности замеров" : "Показать подробности замеров"}
+              >
+                <span className="measurements-toggle-arrow" aria-hidden="true">
+                  ▾
+                </span>
               </button>
 
-              <div className="measurement-list">
-                {profile.measurements.length === 0 ? (
-                  <p className="empty-state">История замеров пока пустая.</p>
-                ) : (
-                  profile.measurements.map((entry) => (
-                    <article key={entry.id} className="measurement-row">
-                      <div className="measurement-date">{entry.date}</div>
-                      <div className="measurement-values">
-                        <span>{formatMetric(entry.weight, " кг")}</span>
-                        <span>{formatMetric(entry.waist, " см")}</span>
-                        <span>{formatMetric(entry.hips, " см")}</span>
-                        <span>{formatMetric(entry.fat, "%")}</span>
-                      </div>
-                      <button type="button" className="ghost-btn" onClick={() => removeMeasurement(entry.id)}>
-                        Удалить
-                      </button>
-                    </article>
-                  ))
-                )}
-              </div>
+              {isMeasurementsExpanded ? (
+                <div className="measurements-details action-drawer">
+                  <div className="measurement-inputs-grid">
+                    <label>
+                      <span>Вес</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.weight}
+                        placeholder="кг"
+                        onChange={(event) => updateProfileField("weight", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Талия</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.waist}
+                        placeholder="см"
+                        onChange={(event) => updateProfileField("waist", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Ягодицы</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.hips}
+                        placeholder="см"
+                        onChange={(event) => updateProfileField("hips", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Жир</span>
+                      <input
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={profile.fat}
+                        placeholder="%"
+                        onChange={(event) => updateProfileField("fat", event.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <button type="button" className="secondary-btn" onClick={addMeasurement}>
+                    Сохранить замер
+                  </button>
+
+                  <div className="measurement-list">
+                    {profile.measurements.length === 0 ? (
+                      <p className="empty-state">История замеров пока пустая.</p>
+                    ) : (
+                      profile.measurements.map((entry) => (
+                        <article key={entry.id} className="measurement-row">
+                          <div className="measurement-date">{entry.date}</div>
+                          <div className="measurement-values">
+                            <span>{formatMetric(entry.weight, " кг")}</span>
+                            <span>{formatMetric(entry.waist, " см")}</span>
+                            <span>{formatMetric(entry.hips, " см")}</span>
+                            <span>{formatMetric(entry.fat, "%")}</span>
+                          </div>
+                          <button type="button" className="ghost-btn" onClick={() => removeMeasurement(entry.id)}>
+                            Удалить
+                          </button>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             {notice ? <p className="inline-notice">{notice}</p> : null}
