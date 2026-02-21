@@ -1,3 +1,4 @@
+﻿
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
@@ -12,7 +13,7 @@ import {
 
 type TgUser = {
   first_name?: string;
-  language_code?: string;
+  photo_url?: string;
 };
 
 type TgWebApp = {
@@ -33,7 +34,8 @@ declare global {
 
 type DayPlanId = "upper" | "lower" | "cardio" | "custom";
 type CustomLibraryFilter = "all" | BasePlanId;
-type IconName = DayPlanId | "profile";
+type AppScreen = "home" | "workout" | "profile";
+type IconName = DayPlanId | "home" | "profile" | "add";
 
 type DayPlan = {
   id: DayPlanId;
@@ -43,12 +45,10 @@ type DayPlan = {
   image: string;
 };
 
-type CalendarDay = {
-  key: string;
-  weekday: string;
-  dayNumber: string;
-  fullLabel: string;
-  isToday: boolean;
+type DropSet = {
+  id: string;
+  weight: string;
+  reps: string;
 };
 
 type WorkoutSet = {
@@ -56,12 +56,6 @@ type WorkoutSet = {
   weight: string;
   reps: string;
   dropSets: DropSet[];
-};
-
-type DropSet = {
-  id: string;
-  weight: string;
-  reps: string;
 };
 
 type SessionExercise = {
@@ -73,12 +67,41 @@ type SessionExercise = {
 
 type SessionByPlan = Record<DayPlanId, SessionExercise[]>;
 type SelectedExerciseByPlan = Record<DayPlanId, string>;
-
 type SetField = "weight" | "reps";
 type DropSetField = "weight" | "reps";
 
-const STORAGE_KEY = "gym-check-session-v4";
+type CalendarDay = {
+  key: string;
+  weekday: string;
+  dayNumber: string;
+  fullLabel: string;
+  isToday: boolean;
+};
+
+type MeasurementEntry = {
+  id: string;
+  date: string;
+  weight: string;
+  waist: string;
+  hips: string;
+  fat: string;
+};
+
+type ProfileState = {
+  goal: string;
+  weight: string;
+  height: string;
+  age: string;
+  waist: string;
+  hips: string;
+  fat: string;
+  measurements: MeasurementEntry[];
+};
+
+const STORAGE_KEY = "gym-check-session-v7";
+const PROFILE_STORAGE_KEY = "gym-check-profile-v2";
 const DEFAULT_REST_SECONDS = 90;
+
 const customFilterOptions: { id: CustomLibraryFilter; label: string }[] = [
   { id: "all", label: "Все" },
   { id: "upper", label: "Верх" },
@@ -97,14 +120,14 @@ const dayPlans: DayPlan[] = [
   {
     id: "lower",
     title: "Ноги и ягодицы",
-    subtitle: "Квадрицепс, бицепс бедра, ягодицы",
+    subtitle: "Ягодичные, квадрицепс, задняя поверхность бедра",
     icon: "lower",
     image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80",
   },
   {
     id: "cardio",
     title: "День кардио",
-    subtitle: "Выносливость, пульс и жиросжигание",
+    subtitle: "Выносливость и жиросжигание",
     icon: "cardio",
     image: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1200&q=80",
   },
@@ -148,6 +171,7 @@ function createId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
+
   return `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 }
 
@@ -155,6 +179,11 @@ function sanitizeNumber(value: unknown, maxDigits: number): string {
   return String(value ?? "")
     .replace(/[^\d]/g, "")
     .slice(0, maxDigits);
+}
+
+function parseObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
 }
 
 function createDropSet(weight = "", reps = ""): DropSet {
@@ -185,58 +214,60 @@ function createExercise(name: string, sets?: WorkoutSet[]): SessionExercise {
 
 function buildDefaultSessionByPlan(): SessionByPlan {
   return {
-    upper: [
-      createExercise("Жим штанги лежа", [createSet("35", "12"), createSet("40", "10")]),
-      createExercise("Тяга верхнего блока широким хватом", [createSet("40", "12")]),
-    ],
-    lower: [
-      createExercise("Приседания со штангой", [createSet("45", "12"), createSet("50", "10")]),
-      createExercise("Ягодичный мостик со штангой", [createSet("60", "12")]),
-    ],
-    cardio: [
-      createExercise("Бег на дорожке (легкий темп)", [createSet("0", "20")]),
-      createExercise("Велотренажер", [createSet("0", "15")]),
-    ],
+    upper: [],
+    lower: [],
+    cardio: [],
     custom: [],
   };
 }
-
 function normalizeExercises(input: unknown): SessionExercise[] {
   if (!Array.isArray(input)) return [];
 
   return input
-    .map((item) => {
-      const name = typeof item?.name === "string" ? item.name.trim().slice(0, 80) : "";
-      if (!name) return null;
-      const canonicalName = getExerciseDefinition(name)?.name ?? name;
+    .map((rawItem) => {
+      const item = parseObject(rawItem);
+      if (!item) return null;
 
-      const sets = Array.isArray(item?.sets)
-        ? item.sets.map((setItem: { weight?: unknown; reps?: unknown; dropSets?: unknown }) => {
-            const normalizedDropSets = Array.isArray(setItem?.dropSets)
-              ? setItem.dropSets.map((dropItem: { weight?: unknown; reps?: unknown }) =>
-                  createDropSet(
-                    typeof dropItem?.weight === "string" ? dropItem.weight : String(dropItem?.weight ?? ""),
-                    typeof dropItem?.reps === "string" ? dropItem.reps : String(dropItem?.reps ?? ""),
-                  ),
-                )
-              : [];
+      const rawName = typeof item.name === "string" ? item.name.trim().slice(0, 90) : "";
+      if (!rawName) return null;
 
-            return createSet(
-              typeof setItem?.weight === "string" ? setItem.weight : String(setItem?.weight ?? ""),
-              typeof setItem?.reps === "string" ? setItem.reps : String(setItem?.reps ?? ""),
-              normalizedDropSets,
-            );
-          })
-        : [createSet()];
+      const canonicalName = getExerciseDefinition(rawName)?.name ?? rawName;
+      const rawSets = Array.isArray(item.sets) ? item.sets : [];
+
+      const sets = rawSets
+        .map((rawSet) => {
+          const setObj = parseObject(rawSet);
+          if (!setObj) return null;
+
+          const rawDropSets = Array.isArray(setObj.dropSets) ? setObj.dropSets : [];
+          const dropSets = rawDropSets
+            .map((rawDrop) => {
+              const dropObj = parseObject(rawDrop);
+              if (!dropObj) return null;
+
+              return createDropSet(
+                typeof dropObj.weight === "string" ? dropObj.weight : String(dropObj.weight ?? ""),
+                typeof dropObj.reps === "string" ? dropObj.reps : String(dropObj.reps ?? ""),
+              );
+            })
+            .filter((dropSet): dropSet is DropSet => Boolean(dropSet));
+
+          return createSet(
+            typeof setObj.weight === "string" ? setObj.weight : String(setObj.weight ?? ""),
+            typeof setObj.reps === "string" ? setObj.reps : String(setObj.reps ?? ""),
+            dropSets,
+          );
+        })
+        .filter((setItem): setItem is WorkoutSet => Boolean(setItem));
 
       return {
         id: createId(),
         name: canonicalName,
-        expanded: Boolean(item?.expanded),
+        expanded: Boolean(item.expanded),
         sets: sets.length > 0 ? sets : [createSet()],
-      } as SessionExercise;
+      };
     })
-    .filter((item): item is SessionExercise => item !== null);
+    .filter((exercise): exercise is SessionExercise => Boolean(exercise));
 }
 
 function loadSessionByPlan(): SessionByPlan {
@@ -246,30 +277,76 @@ function loadSessionByPlan(): SessionByPlan {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
 
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return fallback;
-
-    const upper = normalizeExercises((parsed as Partial<SessionByPlan>).upper);
-    const lower = normalizeExercises((parsed as Partial<SessionByPlan>).lower);
-    const cardio = normalizeExercises((parsed as Partial<SessionByPlan>).cardio);
-    const custom = normalizeExercises((parsed as Partial<SessionByPlan>).custom);
+    const parsed = parseObject(JSON.parse(raw));
+    if (!parsed) return fallback;
 
     return {
-      upper: upper.length > 0 ? upper : fallback.upper,
-      lower: lower.length > 0 ? lower : fallback.lower,
-      cardio: cardio.length > 0 ? cardio : fallback.cardio,
-      custom,
+      upper: normalizeExercises(parsed.upper),
+      lower: normalizeExercises(parsed.lower),
+      cardio: normalizeExercises(parsed.cardio),
+      custom: normalizeExercises(parsed.custom),
     };
   } catch {
     return fallback;
   }
 }
 
-function formatSeconds(totalSeconds: number): string {
-  const safe = Math.max(0, Math.floor(totalSeconds));
-  const minutes = Math.floor(safe / 60);
-  const seconds = safe % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+function buildDefaultProfile(): ProfileState {
+  return {
+    goal: "",
+    weight: "",
+    height: "",
+    age: "",
+    waist: "",
+    hips: "",
+    fat: "",
+    measurements: [],
+  };
+}
+
+function loadProfileState(): ProfileState {
+  const fallback = buildDefaultProfile();
+
+  try {
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return fallback;
+
+    const parsed = parseObject(JSON.parse(raw));
+    if (!parsed) return fallback;
+
+    const rawMeasurements = Array.isArray(parsed.measurements) ? parsed.measurements : [];
+    const measurements = rawMeasurements
+      .map((rawItem) => {
+        const item = parseObject(rawItem);
+        if (!item) return null;
+
+        const date = typeof item.date === "string" ? item.date.slice(0, 32) : "";
+        if (!date) return null;
+
+        return {
+          id: createId(),
+          date,
+          weight: sanitizeNumber(item.weight, 3),
+          waist: sanitizeNumber(item.waist, 3),
+          hips: sanitizeNumber(item.hips, 3),
+          fat: sanitizeNumber(item.fat, 2),
+        };
+      })
+      .filter((entry): entry is MeasurementEntry => Boolean(entry));
+
+    return {
+      goal: typeof parsed.goal === "string" ? parsed.goal.slice(0, 140) : "",
+      weight: sanitizeNumber(parsed.weight, 3),
+      height: sanitizeNumber(parsed.height, 3),
+      age: sanitizeNumber(parsed.age, 2),
+      waist: sanitizeNumber(parsed.waist, 3),
+      hips: sanitizeNumber(parsed.hips, 3),
+      fat: sanitizeNumber(parsed.fat, 2),
+      measurements,
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 function formatDateKey(date: Date): string {
@@ -280,42 +357,83 @@ function formatDateKey(date: Date): string {
 }
 
 function getWeekStart(date: Date): Date {
-  const weekStart = new Date(date);
-  const day = weekStart.getDay();
-  const mondayBasedOffset = (day + 6) % 7;
-  weekStart.setDate(weekStart.getDate() - mondayBasedOffset);
-  weekStart.setHours(0, 0, 0, 0);
-  return weekStart;
+  const current = new Date(date);
+  current.setHours(0, 0, 0, 0);
+  const day = (current.getDay() + 6) % 7;
+  current.setDate(current.getDate() - day);
+  return current;
 }
 
-function buildCalendarWeek(baseDate: Date): CalendarDay[] {
-  const weekStart = getWeekStart(baseDate);
-  const todayKey = formatDateKey(baseDate);
+function buildCalendarWeek(anchorDate: Date): CalendarDay[] {
+  const start = getWeekStart(anchorDate);
   const weekdayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "short" });
-  const fullLabelFormatter = new Intl.DateTimeFormat("ru-RU", {
+  const fullFormatter = new Intl.DateTimeFormat("ru-RU", {
     weekday: "long",
     day: "numeric",
     month: "long",
   });
+  const todayKey = formatDateKey(new Date());
 
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(weekStart);
-    date.setDate(weekStart.getDate() + index);
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
 
     const key = formatDateKey(date);
-    const weekday = weekdayFormatter.format(date).replace(".", "").slice(0, 2).toUpperCase();
+    const weekday = weekdayFormatter.format(date).replace(".", "").slice(0, 2);
 
     return {
       key,
       weekday,
       dayNumber: String(date.getDate()),
-      fullLabel: fullLabelFormatter.format(date),
+      fullLabel: fullFormatter.format(date),
       isToday: key === todayKey,
     };
   });
 }
 
+function formatSeconds(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatMetric(value: string, suffix: string): string {
+  return value ? `${value}${suffix}` : "--";
+}
+
 function AppIcon({ name, className }: { name: IconName; className?: string }) {
+  if (name === "home") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <path
+          d="M4.8 10.4L12 4.8L19.2 10.4V18.8H14.6V14.6H9.4V18.8H4.8V10.4Z"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "profile") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <circle cx="12" cy="8.2" r="3.2" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M5.8 18.4C6.9 15.6 9 14.2 12 14.2C15 14.2 17.1 15.6 18.2 18.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (name === "add") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <path d="M12 5.4V18.6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+        <path d="M5.4 12H18.6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
   if (name === "upper") {
     return (
       <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -355,51 +473,47 @@ function AppIcon({ name, className }: { name: IconName; className?: string }) {
     );
   }
 
-  if (name === "custom") {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-        <path d="M12 4.7L13.8 9.2L18.4 11L13.8 12.8L12 17.3L10.2 12.8L5.6 11L10.2 9.2L12 4.7Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-        <path d="M18.2 5.7L18.8 7.3L20.4 7.9L18.8 8.5L18.2 10.1L17.6 8.5L16 7.9L17.6 7.3L18.2 5.7Z" fill="currentColor" />
-      </svg>
-    );
-  }
-
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      <circle cx="12" cy="8.1" r="3.1" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M5.9 18.5C7 15.7 9.1 14.3 12 14.3C14.9 14.3 17 15.7 18.1 18.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M12 4.7L13.8 9.2L18.4 11L13.8 12.8L12 17.3L10.2 12.8L5.6 11L10.2 9.2L12 4.7Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M18.2 5.7L18.8 7.3L20.4 7.9L18.8 8.5L18.2 10.1L17.6 8.5L16 7.9L17.6 7.3L18.2 5.7Z" fill="currentColor" />
     </svg>
   );
 }
 
 export default function App() {
   const tg = useMemo(() => window.Telegram?.WebApp, []);
-  const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "спортсмен";
+  const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "Спортсмен";
+  const userPhoto = tg?.initDataUnsafe?.user?.photo_url ?? "";
   const isDark = tg?.colorScheme === "dark";
 
-  const weekDays = useMemo(() => buildCalendarWeek(new Date()), []);
+  const [screen, setScreen] = useState<AppScreen>("home");
   const [selectedPlanId, setSelectedPlanId] = useState<DayPlanId>("upper");
-  const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey(new Date()));
   const [sessionByPlan, setSessionByPlan] = useState<SessionByPlan>(() => loadSessionByPlan());
-  const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
-    upper: exercisesByPlan.upper[0],
-    lower: exercisesByPlan.lower[0],
-    cardio: exercisesByPlan.cardio[0],
-    custom: exercisesByPlan.custom[0] ?? "",
-  });
+  const [profile, setProfile] = useState<ProfileState>(() => loadProfileState());
+  const [isCreateWorkoutOpen, setIsCreateWorkoutOpen] = useState(false);
   const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
   const [isCustomBuilderOpen, setIsCustomBuilderOpen] = useState(false);
   const [isRestPanelOpen, setIsRestPanelOpen] = useState(false);
   const [restMinutesInput, setRestMinutesInput] = useState(() => String(Math.floor(DEFAULT_REST_SECONDS / 60)));
   const [restSecondsInput, setRestSecondsInput] = useState(() => String(DEFAULT_REST_SECONDS % 60).padStart(2, "0"));
-  const [customSearch, setCustomSearch] = useState("");
-  const [customFilter, setCustomFilter] = useState<CustomLibraryFilter>("all");
   const [restSeconds, setRestSeconds] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
+  const [customSearch, setCustomSearch] = useState("");
+  const [customFilter, setCustomFilter] = useState<CustomLibraryFilter>("all");
+  const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey(new Date()));
+  const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
+    upper: exercisesByPlan.upper[0] ?? "",
+    lower: exercisesByPlan.lower[0] ?? "",
+    cardio: exercisesByPlan.cardio[0] ?? "",
+    custom: exercisesByPlan.custom[0] ?? "",
+  });
 
   const selectedPlan = dayPlanById[selectedPlanId];
   const activeExercises = sessionByPlan[selectedPlanId];
-  const selectedCalendarDay = weekDays.find((day) => day.key === selectedDateKey) ?? weekDays[0];
+  const weekDays = useMemo(() => buildCalendarWeek(new Date()), []);
+  const selectedCalendarDay = weekDays.find((day) => day.key === selectedDateKey) ?? weekDays[0] ?? null;
+
   const normalizedCustomSearch = customSearch.trim().toLowerCase();
   const customExerciseNameSet = useMemo(
     () => new Set(sessionByPlan.custom.map((exercise) => exercise.name.toLowerCase())),
@@ -431,12 +545,17 @@ export default function App() {
     [customFilter, normalizedCustomSearch],
   );
 
+  const plansWithWorkouts = useMemo(
+    () => dayPlans.filter((plan) => sessionByPlan[plan.id].length > 0),
+    [sessionByPlan],
+  );
+
   const setCountsByPlan = useMemo(
     () =>
       dayPlans.reduce(
-        (counts, plan) => {
-          counts[plan.id] = sessionByPlan[plan.id].reduce((sum, exercise) => sum + exercise.sets.length, 0);
-          return counts;
+        (acc, plan) => {
+          acc[plan.id] = sessionByPlan[plan.id].reduce((sum, exercise) => sum + exercise.sets.length, 0);
+          return acc;
         },
         {} as Record<DayPlanId, number>,
       ),
@@ -472,30 +591,38 @@ export default function App() {
   }, [sessionByPlan]);
 
   useEffect(() => {
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  }, [profile]);
+
+  useEffect(() => {
     if (!notice) return;
-    const timerId = setTimeout(() => setNotice(""), 2000);
-    return () => clearTimeout(timerId);
+    const timerId = window.setTimeout(() => setNotice(""), 2300);
+    return () => window.clearTimeout(timerId);
   }, [notice]);
 
   useEffect(() => {
     if (restSeconds === null) return;
 
     const timerId = window.setTimeout(() => {
-      setRestSeconds((prev) => {
-        if (prev === null) return null;
+      setRestSeconds((current) => {
+        if (current === null) return null;
 
-        if (prev <= 1) {
-          setNotice("Отдых завершен. Следующий подход.");
+        if (current <= 1) {
           tg?.HapticFeedback?.impactOccurred?.("medium");
+          setNotice("Отдых завершен. Переходи к следующему подходу.");
           return null;
         }
 
-        return prev - 1;
+        return current - 1;
       });
     }, 1000);
 
     return () => window.clearTimeout(timerId);
   }, [restSeconds, tg]);
+
+  function triggerImpact(style: "light" | "medium" | "heavy" | "rigid" | "soft" = "light") {
+    tg?.HapticFeedback?.impactOccurred?.(style);
+  }
 
   function updateExercisesForPlan(planId: DayPlanId, updater: (prev: SessionExercise[]) => SessionExercise[]) {
     setSessionByPlan((prev) => ({
@@ -504,18 +631,91 @@ export default function App() {
     }));
   }
 
-  function selectPlan(planId: DayPlanId) {
+  function openWorkout(planId: DayPlanId) {
     setSelectedPlanId(planId);
+    setScreen("workout");
+    setIsCreateWorkoutOpen(false);
     setIsExercisePickerOpen(false);
     setIsCustomBuilderOpen(false);
   }
 
+  function goHome() {
+    setScreen("home");
+    setIsCreateWorkoutOpen(false);
+    setIsExercisePickerOpen(false);
+    setIsCustomBuilderOpen(false);
+    setIsRestPanelOpen(false);
+  }
+
+  function openProfile() {
+    setScreen("profile");
+    setIsCreateWorkoutOpen(false);
+    setIsExercisePickerOpen(false);
+    setIsCustomBuilderOpen(false);
+    setIsRestPanelOpen(false);
+  }
+
+  function addExerciseToPlan(planId: DayPlanId, exerciseName: string) {
+    const normalizedName = (getExerciseDefinition(exerciseName)?.name ?? exerciseName).trim();
+    if (!normalizedName) return;
+
+    let added = false;
+
+    updateExercisesForPlan(planId, (prev) => {
+      const alreadyExists = prev.some((exercise) => exercise.name.toLowerCase() === normalizedName.toLowerCase());
+      if (alreadyExists) return prev;
+
+      added = true;
+      return [...prev, createExercise(normalizedName)];
+    });
+
+    if (added) {
+      setNotice(`Добавлено: ${normalizedName}`);
+      triggerImpact("light");
+    } else {
+      setNotice("Это упражнение уже есть в списке");
+    }
+  }
+
+  function addExerciseFromDropdown() {
+    const exerciseName = selectedExerciseByPlan[selectedPlanId];
+    if (!exerciseName) {
+      setNotice("Выбери упражнение");
+      return;
+    }
+
+    addExerciseToPlan(selectedPlanId, exerciseName);
+  }
+
+  function toggleExerciseInCustomProgram(exerciseName: string) {
+    const normalizedName = (getExerciseDefinition(exerciseName)?.name ?? exerciseName).trim();
+    if (!normalizedName) return;
+
+    let removed = false;
+
+    updateExercisesForPlan("custom", (prev) => {
+      const hasExercise = prev.some((exercise) => exercise.name.toLowerCase() === normalizedName.toLowerCase());
+      if (!hasExercise) return [...prev, createExercise(normalizedName)];
+
+      removed = true;
+      return prev.filter((exercise) => exercise.name.toLowerCase() !== normalizedName.toLowerCase());
+    });
+
+    setNotice(removed ? `Убрано: ${normalizedName}` : `Добавлено: ${normalizedName}`);
+    triggerImpact("soft");
+  }
   function toggleExercise(exerciseId: string) {
     updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) =>
         exercise.id === exerciseId ? { ...exercise, expanded: !exercise.expanded } : exercise,
       ),
     );
+  }
+
+  function removeExercise(exerciseId: string) {
+    updateExercisesForPlan(selectedPlanId, (prev) => prev.filter((exercise) => exercise.id !== exerciseId));
+    setNotice("Упражнение удалено");
+    triggerImpact("soft");
   }
 
   function updateSetValue(exerciseId: string, setId: string, field: SetField, value: string) {
@@ -535,6 +735,37 @@ export default function App() {
     );
   }
 
+  function addSet(exerciseId: string) {
+    updateExercisesForPlan(selectedPlanId, (prev) =>
+      prev.map((exercise) =>
+        exercise.id === exerciseId ? { ...exercise, sets: [...exercise.sets, createSet()] } : exercise,
+      ),
+    );
+  }
+
+  function removeSet(exerciseId: string, setId: string) {
+    let removed = false;
+
+    updateExercisesForPlan(selectedPlanId, (prev) =>
+      prev.map((exercise) => {
+        if (exercise.id !== exerciseId) return exercise;
+        if (exercise.sets.length <= 1) return exercise;
+
+        removed = true;
+        return {
+          ...exercise,
+          sets: exercise.sets.filter((setItem) => setItem.id !== setId),
+        };
+      }),
+    );
+
+    if (removed) {
+      triggerImpact("soft");
+    } else {
+      setNotice("Нужен минимум один подход");
+    }
+  }
+
   function addDropSet(exerciseId: string, setId: string) {
     updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) => {
@@ -545,17 +776,20 @@ export default function App() {
           sets: exercise.sets.map((setItem) => {
             if (setItem.id !== setId) return setItem;
 
-            const lastDrop = setItem.dropSets[setItem.dropSets.length - 1];
+            const previous = setItem.dropSets[setItem.dropSets.length - 1];
+            const weight = previous?.weight ?? setItem.weight;
+            const reps = previous?.reps ?? setItem.reps;
 
             return {
               ...setItem,
-              dropSets: [...setItem.dropSets, createDropSet(lastDrop?.weight ?? "", lastDrop?.reps ?? "")],
+              dropSets: [...setItem.dropSets, createDropSet(weight, reps)],
             };
           }),
         };
       }),
     );
-    tg?.HapticFeedback?.impactOccurred?.("light");
+
+    triggerImpact("light");
   }
 
   function updateDropSetValue(
@@ -595,516 +829,737 @@ export default function App() {
 
         return {
           ...exercise,
-          sets: exercise.sets.map((setItem) =>
-            setItem.id === setId
-              ? { ...setItem, dropSets: setItem.dropSets.filter((dropSet) => dropSet.id !== dropSetId) }
-              : setItem,
-          ),
+          sets: exercise.sets.map((setItem) => {
+            if (setItem.id !== setId) return setItem;
+
+            return {
+              ...setItem,
+              dropSets: setItem.dropSets.filter((dropSet) => dropSet.id !== dropSetId),
+            };
+          }),
         };
       }),
     );
+
+    triggerImpact("soft");
   }
 
-  function addSet(exerciseId: string) {
-    updateExercisesForPlan(selectedPlanId, (prev) =>
-      prev.map((exercise) => {
-        if (exercise.id !== exerciseId) return exercise;
-
-        const lastSet = exercise.sets[exercise.sets.length - 1];
-
-        return {
-          ...exercise,
-          expanded: true,
-          sets: [...exercise.sets, createSet(lastSet?.weight ?? "", lastSet?.reps ?? "")],
-        };
-      }),
-    );
-    setNotice("Подход добавлен");
-    tg?.HapticFeedback?.impactOccurred?.("light");
-  }
-
-  function removeExercise(exerciseId: string) {
-    updateExercisesForPlan(selectedPlanId, (prev) => prev.filter((exercise) => exercise.id !== exerciseId));
-    setNotice("Упражнение удалено");
-  }
-
-  function toggleExerciseInCustomProgram(exerciseName: string) {
-    let added = false;
-
-    updateExercisesForPlan("custom", (prev) => {
-      const exists = prev.some((exercise) => exercise.name.toLowerCase() === exerciseName.toLowerCase());
-      if (exists) {
-        return prev.filter((exercise) => exercise.name.toLowerCase() !== exerciseName.toLowerCase());
-      }
-
-      added = true;
-      return [...prev, createExercise(exerciseName, [createSet()])];
-    });
-
-    if (added) {
-      setNotice(`Добавлено в свою программу: ${exerciseName}`);
-      tg?.HapticFeedback?.impactOccurred?.("light");
-      return;
-    }
-
-    setNotice(`Убрано из своей программы: ${exerciseName}`);
-    tg?.HapticFeedback?.impactOccurred?.("light");
-  }
-
-  function addExerciseFromDropdown() {
-    if (selectedPlanId === "custom") return;
-
-    const exerciseName = selectedExerciseByPlan[selectedPlanId];
-    if (!exerciseName) return;
-
-    let duplicate = false;
-
-    updateExercisesForPlan(selectedPlanId, (prev) => {
-      const exists = prev.some((exercise) => exercise.name.toLowerCase() === exerciseName.toLowerCase());
-      if (exists) {
-        duplicate = true;
-        return prev.map((exercise) =>
-          exercise.name.toLowerCase() === exerciseName.toLowerCase() ? { ...exercise, expanded: true } : exercise,
-        );
-      }
-
-      return [...prev, createExercise(exerciseName, [createSet()])];
-    });
-
-    if (duplicate) {
-      setNotice("Это упражнение уже есть в текущем дне");
-      return;
-    }
-
-    setNotice(`Добавлено: ${exerciseName}`);
-    setIsExercisePickerOpen(false);
-    tg?.HapticFeedback?.impactOccurred?.("medium");
+  function clearCurrentPlan() {
+    updateExercisesForPlan(selectedPlanId, () => []);
+    setNotice("Тренировка очищена");
+    triggerImpact("rigid");
   }
 
   function startRestTimer() {
-    const minutes = Math.min(Number(sanitizeNumber(restMinutesInput, 2) || "0"), 59);
-    const seconds = Math.min(Number(sanitizeNumber(restSecondsInput, 2) || "0"), 59);
-    const totalSeconds = minutes * 60 + seconds;
+    const minutes = Number(restMinutesInput || "0");
+    const seconds = Number(restSecondsInput || "0");
 
-    if (totalSeconds <= 0) {
+    const safeMinutes = Number.isFinite(minutes) ? Math.max(0, Math.min(99, Math.floor(minutes))) : 0;
+    const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.min(59, Math.floor(seconds))) : 0;
+    const total = safeMinutes * 60 + safeSeconds;
+
+    if (total <= 0) {
       setNotice("Укажи время отдыха");
       return;
     }
 
-    setRestSeconds(totalSeconds);
-    setRestMinutesInput(String(minutes));
-    setRestSecondsInput(String(seconds).padStart(2, "0"));
-    setNotice(`Отдых запущен: ${formatSeconds(totalSeconds)}`);
-    setIsRestPanelOpen(false);
-    tg?.HapticFeedback?.impactOccurred?.("medium");
+    setRestMinutesInput(String(safeMinutes));
+    setRestSecondsInput(String(safeSeconds).padStart(2, "0"));
+    setRestSeconds(total);
+    setIsRestPanelOpen(true);
+    triggerImpact("light");
   }
 
   function stopRestTimer() {
     setRestSeconds(null);
-    setNotice("Таймер отдыха остановлен");
+  }
+
+  function updateProfileField(field: keyof Omit<ProfileState, "measurements">, value: string) {
+    setProfile((prev) => ({
+      ...prev,
+      [field]: field === "goal" ? value.slice(0, 140) : sanitizeNumber(value, field === "age" || field === "fat" ? 2 : 3),
+    }));
+  }
+
+  function addMeasurement() {
+    if (!profile.weight && !profile.waist && !profile.hips && !profile.fat) {
+      setNotice("Заполни хотя бы один параметр замера");
+      return;
+    }
+
+    const date = new Date().toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+    const entry: MeasurementEntry = {
+      id: createId(),
+      date,
+      weight: profile.weight,
+      waist: profile.waist,
+      hips: profile.hips,
+      fat: profile.fat,
+    };
+
+    setProfile((prev) => ({
+      ...prev,
+      measurements: [entry, ...prev.measurements].slice(0, 40),
+    }));
+
+    setNotice("Замер сохранен");
+    triggerImpact("medium");
+  }
+
+  function removeMeasurement(entryId: string) {
+    setProfile((prev) => ({
+      ...prev,
+      measurements: prev.measurements.filter((entry) => entry.id !== entryId),
+    }));
   }
 
   return (
     <div className={`app-shell ${isDark ? "theme-dark" : "theme-light"}`}>
-      <main className="workout-app">
-        <header className="top-row">
-          <div>
-            <p className="app-title">Тренировки</p>
-            <p className="app-subtitle">Сегодня для тебя, {userName}</p>
-          </div>
-          <button className="avatar-btn" type="button" aria-label="Профиль">
-            <AppIcon name="profile" className="app-icon app-icon-md" />
-          </button>
-        </header>
+      <main className="app-frame">
+        {screen === "home" ? (
+          <>
+            <header className="screen-head">
+              <div className="head-copy">
+                <p className="screen-kicker">Gym Check</p>
+                <h1 className="screen-title">Тренировки</h1>
+                <p className="screen-subtitle">Привет, {userName}</p>
+              </div>
 
-        <section className="mini-calendar" aria-label="Календарь недели">
-          <div className="mini-calendar-head">
-            <p className="mini-calendar-title">Календарь</p>
-            {selectedCalendarDay ? <p className="mini-calendar-selected">{selectedCalendarDay.fullLabel}</p> : null}
-          </div>
-
-          <div className="calendar-days">
-            {weekDays.map((day) => (
-              <button
-                key={day.key}
-                type="button"
-                className={`calendar-day ${selectedDateKey === day.key ? "is-active" : ""} ${day.isToday ? "is-today" : ""}`}
-                aria-label={day.fullLabel}
-                onClick={() => setSelectedDateKey(day.key)}
-              >
-                <span className="calendar-weekday">{day.weekday}</span>
-                <span className="calendar-number">{day.dayNumber}</span>
+              <button type="button" className="avatar-btn" onClick={openProfile} aria-label="Открыть профиль">
+                {userPhoto ? (
+                  <img src={userPhoto} alt={userName} className="avatar-img" />
+                ) : (
+                  <AppIcon name="profile" className="app-icon app-icon-md" />
+                )}
               </button>
-            ))}
-          </div>
-        </section>
+            </header>
 
-        <section className="plan-tabs" aria-label="Тип тренировочного дня">
-          {dayPlans.map((plan) => (
-            <button
-              key={plan.id}
-              type="button"
-              className={`plan-tab ${selectedPlanId === plan.id ? "is-active" : ""}`}
-              onClick={() => selectPlan(plan.id)}
-            >
-              <span className="tab-title">{plan.title}</span>
-              <span className="tab-count">{setCountsByPlan[plan.id]}</span>
-            </button>
-          ))}
-        </section>
+            <section className="home-card">
+              <p className="home-card-title">Начни новую тренировку</p>
+              <p className="home-card-subtitle">На старте все пусто. Нажми кнопку, выбери день и добавь упражнения.</p>
 
-        <section
-          className="plan-hero"
-          style={{
-            backgroundImage: `linear-gradient(120deg, rgba(20, 26, 40, 0.42), rgba(20, 26, 40, 0.12)), url(${selectedPlan.image})`,
-          }}
-        >
-          <p className="plan-hero-title">{selectedPlan.title}</p>
-          <p className="plan-hero-subtitle">{selectedPlan.subtitle}</p>
-        </section>
+              <button
+                type="button"
+                className={`primary-btn ${isCreateWorkoutOpen ? "is-open" : ""}`}
+                onClick={() => setIsCreateWorkoutOpen((prev) => !prev)}
+              >
+                <AppIcon name="add" className="app-icon app-icon-sm" />
+                <span>{isCreateWorkoutOpen ? "Скрыть список" : "Добавить тренировку"}</span>
+              </button>
 
-        <section className="quick-actions" aria-label="Быстрые действия">
-          {selectedPlanId === "custom" ? (
-            <button
-              type="button"
-              className={`action-btn ${isCustomBuilderOpen ? "is-active" : ""}`}
-              onClick={() => setIsCustomBuilderOpen((prev) => !prev)}
-            >
-              <span>База упражнений</span>
-              <span className="action-hint">{isCustomBuilderOpen ? "Скрыть" : "Открыть"}</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={`action-btn ${isExercisePickerOpen ? "is-active" : ""}`}
-              onClick={() => setIsExercisePickerOpen((prev) => !prev)}
-            >
-              <span>Добавить упражнение</span>
-              <span className="action-hint">{isExercisePickerOpen ? "Скрыть" : "Открыть"}</span>
-            </button>
-          )}
+              {isCreateWorkoutOpen ? (
+                <div className="plan-picker action-drawer" aria-label="Выбрать тренировочный день">
+                  {dayPlans.map((plan) => {
+                    const exerciseCount = sessionByPlan[plan.id].length;
 
-          <button
-            type="button"
-            className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
-            onClick={() => setIsRestPanelOpen((prev) => !prev)}
-          >
-            <span>Отдых</span>
-            <span className="action-hint">{restSeconds !== null ? formatSeconds(restSeconds) : "Мин/сек"}</span>
-          </button>
-        </section>
+                    return (
+                      <button key={plan.id} type="button" className="plan-option" onClick={() => openWorkout(plan.id)}>
+                        <span className="plan-option-icon" aria-hidden="true">
+                          <AppIcon name={plan.icon} className="app-icon app-icon-sm" />
+                        </span>
+                        <span className="plan-option-copy">
+                          <strong>{plan.title}</strong>
+                          <small>{plan.subtitle}</small>
+                        </span>
+                        <span className="plan-option-count">{exerciseCount}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </section>
 
-        {selectedPlanId === "custom" && isCustomBuilderOpen ? (
-          <section className="custom-program-builder action-drawer" aria-label="Конструктор своей программы">
-            <div className="builder-head">
-              <p className="builder-title">База упражнений</p>
-              <p className="builder-subtitle">Выбери упражнения, которые хочешь добавить в свою программу</p>
-            </div>
+            <section className="saved-workouts">
+              <div className="section-head">
+                <p className="section-title">Мои тренировки</p>
+              </div>
 
-            <input
-              id="custom-search"
-              className="custom-search-input"
-              type="search"
-              placeholder="Найти упражнение"
-              value={customSearch}
-              onChange={(event) => setCustomSearch(event.target.value)}
-            />
-
-            <div className="builder-filters" aria-label="Фильтр упражнений">
-              {customFilterOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={`builder-filter-btn ${customFilter === option.id ? "is-active" : ""}`}
-                  onClick={() => setCustomFilter(option.id)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="builder-library">
-              {filteredCustomSections.length === 0 ? (
-                <p className="builder-empty">По запросу ничего не найдено.</p>
+              {plansWithWorkouts.length === 0 ? (
+                <p className="empty-state">Пока пусто. Добавь первую тренировку через кнопку выше.</p>
               ) : (
-                filteredCustomSections.map((section) => (
-                  <div key={section.id} className="library-section">
-                    <p className="library-section-title">
-                      <span className="library-section-icon" aria-hidden="true">
-                        <AppIcon name={section.icon} className="app-icon app-icon-xs" />
+                <div className="saved-list">
+                  {plansWithWorkouts.map((plan) => (
+                    <article key={plan.id} className="saved-card">
+                      <span className="saved-icon" aria-hidden="true">
+                        <AppIcon name={plan.icon} className="app-icon app-icon-sm" />
                       </span>
-                      <span>{section.title}</span>
-                    </p>
-
-                    <div className="library-items">
-                      {section.exercises.map((exerciseDef) => {
-                        const exerciseName = exerciseDef.name;
-                        const isAdded = customExerciseNameSet.has(exerciseName.toLowerCase());
-
-                        return (
-                          <button
-                            key={exerciseName}
-                            type="button"
-                            className={`library-item ${isAdded ? "is-added" : ""}`}
-                            onClick={() => toggleExerciseInCustomProgram(exerciseName)}
-                          >
-                            <span className="library-item-main">
-                              <img
-                                src={exerciseDef.image}
-                                alt={exerciseName}
-                                className="library-item-thumb"
-                                loading="lazy"
-                              />
-                              <span className="library-item-copy">
-                                <span className="library-item-name">{exerciseName}</span>
-                                <span className="library-item-muscles">
-                                  {formatMuscleList(exerciseDef.primaryMuscles, 2)}
-                                </span>
-                              </span>
-                            </span>
-                            <span className="library-item-action">{isAdded ? "Убрать" : "Добавить"}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))
+                      <div className="saved-copy">
+                        <strong>{plan.title}</strong>
+                        <small>
+                          {sessionByPlan[plan.id].length} упражнений · {setCountsByPlan[plan.id]} подходов
+                        </small>
+                      </div>
+                      <button type="button" className="ghost-btn" onClick={() => openWorkout(plan.id)}>
+                        Открыть
+                      </button>
+                    </article>
+                  ))}
+                </div>
               )}
-            </div>
-          </section>
+            </section>
+
+            {notice ? <p className="inline-notice">{notice}</p> : null}
+          </>
         ) : null}
 
-        {selectedPlanId !== "custom" && isExercisePickerOpen ? (
-          <section className="exercise-picker action-drawer" aria-label="Добавление упражнения">
-            <label htmlFor="exercise-select">Упражнения для: {selectedPlan.title}</label>
-            <div className="picker-row">
-              <select
-                id="exercise-select"
-                className="picker-select"
-                value={selectedExerciseByPlan[selectedPlanId]}
-                onChange={(event) =>
-                  setSelectedExerciseByPlan((prev) => ({
-                    ...prev,
-                    [selectedPlanId]: event.target.value,
-                  }))
-                }
-              >
-                {exercisesByPlan[selectedPlanId].map((exerciseName) => (
-                  <option key={exerciseName} value={exerciseName}>
-                    {exerciseName}
-                  </option>
+        {screen === "workout" ? (
+          <>
+            <header className="screen-head screen-head-tight">
+              <button type="button" className="icon-btn" onClick={goHome} aria-label="На главную">
+                <AppIcon name="home" className="app-icon app-icon-md" />
+              </button>
+
+              <div className="head-copy">
+                <p className="screen-kicker">Тренировка</p>
+                <h2 className="screen-title-sm">{selectedPlan.title}</h2>
+              </div>
+
+              <button type="button" className="avatar-btn" onClick={openProfile} aria-label="Открыть профиль">
+                {userPhoto ? (
+                  <img src={userPhoto} alt={userName} className="avatar-img" />
+                ) : (
+                  <AppIcon name="profile" className="app-icon app-icon-md" />
+                )}
+              </button>
+            </header>
+
+            <section className="mini-calendar" aria-label="Календарь недели">
+              <div className="mini-calendar-head">
+                <p className="mini-calendar-title">Календарь</p>
+                {selectedCalendarDay ? <p className="mini-calendar-selected">{selectedCalendarDay.fullLabel}</p> : null}
+              </div>
+
+              <div className="calendar-days">
+                {weekDays.map((day) => (
+                  <button
+                    key={day.key}
+                    type="button"
+                    className={`calendar-day ${selectedDateKey === day.key ? "is-active" : ""} ${day.isToday ? "is-today" : ""}`}
+                    aria-label={day.fullLabel}
+                    onClick={() => setSelectedDateKey(day.key)}
+                  >
+                    <span className="calendar-weekday">{day.weekday}</span>
+                    <span className="calendar-number">{day.dayNumber}</span>
+                  </button>
                 ))}
-              </select>
-              <button type="button" className="picker-add-btn" onClick={addExerciseFromDropdown}>
-                Добавить
-              </button>
-            </div>
-          </section>
-        ) : null}
+              </div>
+            </section>
+            <section
+              className="plan-hero"
+              style={{
+                backgroundImage: `linear-gradient(120deg, rgba(17, 24, 39, 0.62), rgba(17, 24, 39, 0.18)), url(${selectedPlan.image})`,
+              }}
+            >
+              <p className="plan-hero-title">{selectedPlan.title}</p>
+              <p className="plan-hero-subtitle">{selectedPlan.subtitle}</p>
+            </section>
 
-        {notice ? <p className="inline-notice">{notice}</p> : null}
-
-        {isRestPanelOpen || restSeconds !== null ? (
-          <section className="rest-drawer action-drawer" aria-label="Настройки отдыха">
-            <div className="rest-drawer-head">
-              <p className="rest-label">Отдых</p>
-              <p className="rest-value">{restSeconds !== null ? formatSeconds(restSeconds) : "Не запущен"}</p>
-            </div>
-
-            <div className="rest-input-grid">
-              <label>
-                Мин
-                <input
-                  className="rest-time-input"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="0"
-                  value={restMinutesInput}
-                  onChange={(event) => setRestMinutesInput(sanitizeNumber(event.target.value, 2))}
-                />
-              </label>
-              <label>
-                Сек
-                <input
-                  className="rest-time-input"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="00"
-                  value={restSecondsInput}
-                  onChange={(event) => setRestSecondsInput(sanitizeNumber(event.target.value, 2))}
-                />
-              </label>
-            </div>
-
-            <div className="rest-actions">
-              <button
-                type="button"
-                className="rest-btn"
-                onClick={startRestTimer}
-              >
-                Запустить
-              </button>
-              {restSeconds !== null ? (
-                <button type="button" className="rest-btn is-ghost" onClick={stopRestTimer}>
-                  Остановить
+            <section className="quick-actions" aria-label="Быстрые действия">
+              {selectedPlanId === "custom" ? (
+                <button
+                  type="button"
+                  className={`action-btn ${isCustomBuilderOpen ? "is-active" : ""}`}
+                  onClick={() => setIsCustomBuilderOpen((prev) => !prev)}
+                >
+                  <span>База упражнений</span>
+                  <span className="action-hint">{isCustomBuilderOpen ? "Скрыть" : "Открыть"}</span>
                 </button>
               ) : (
-                <button type="button" className="rest-btn is-ghost" onClick={() => setIsRestPanelOpen(false)}>
-                  Скрыть
+                <button
+                  type="button"
+                  className={`action-btn ${isExercisePickerOpen ? "is-active" : ""}`}
+                  onClick={() => setIsExercisePickerOpen((prev) => !prev)}
+                >
+                  <span>Добавить упражнение</span>
+                  <span className="action-hint">{isExercisePickerOpen ? "Скрыть" : "Открыть"}</span>
                 </button>
               )}
-            </div>
-          </section>
-        ) : null}
 
-        <section className="exercise-board" aria-label="Список упражнений">
-          {activeExercises.length === 0 ? (
-            <p className="exercise-empty">
-              {selectedPlanId === "custom"
-                ? "Своя программа пока пустая. Добавь упражнения из базы выше."
-                : "В этом дне пока нет упражнений. Выбери из выпадающего списка выше."}
-            </p>
-          ) : (
-            activeExercises.map((exercise) => {
-              const prWeight = personalRecords.get(exercise.name) ?? 0;
-              const exerciseDef = getExerciseDefinition(exercise.name);
-              const primaryMuscles = exerciseDef ? formatMuscleList(exerciseDef.primaryMuscles) : "";
-              const secondaryMuscles =
-                exerciseDef && exerciseDef.secondaryMuscles.length > 0
-                  ? formatMuscleList(exerciseDef.secondaryMuscles, 4)
-                  : "";
+              <button
+                type="button"
+                className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
+                onClick={() => setIsRestPanelOpen((prev) => !prev)}
+              >
+                <span>Отдых</span>
+                <span className="action-hint">{restSeconds !== null ? formatSeconds(restSeconds) : "мин/сек"}</span>
+              </button>
 
-              return (
-                <article key={exercise.id} className={`exercise-card ${exercise.expanded ? "expanded" : ""}`}>
-                  <button
-                    type="button"
-                    className="exercise-head"
-                    onClick={() => toggleExercise(exercise.id)}
-                    aria-expanded={exercise.expanded}
+              <button type="button" className="action-btn" onClick={clearCurrentPlan}>
+                <span>Очистить день</span>
+                <span className="action-hint">{activeExercises.length}</span>
+              </button>
+            </section>
+
+            {selectedPlanId !== "custom" && isExercisePickerOpen ? (
+              <section className="exercise-picker action-drawer" aria-label="Добавление упражнения">
+                <label htmlFor="exercise-select">Упражнения для: {selectedPlan.title}</label>
+                <div className="picker-row">
+                  <select
+                    id="exercise-select"
+                    className="picker-select"
+                    value={selectedExerciseByPlan[selectedPlanId]}
+                    onChange={(event) =>
+                      setSelectedExerciseByPlan((prev) => ({
+                        ...prev,
+                        [selectedPlanId]: event.target.value,
+                      }))
+                    }
                   >
-                    <span className="exercise-icon" aria-hidden="true">
-                      <AppIcon name={selectedPlan.icon} className="app-icon app-icon-sm" />
-                    </span>
-                    <span className="exercise-text">
-                      <strong>{exercise.name}</strong>
-                      <small>{exerciseDef ? `Основные: ${primaryMuscles}` : selectedPlan.title}</small>
-                    </span>
-                    {prWeight > 0 ? <span className="exercise-pr">PR {prWeight} кг</span> : null}
-                    <span className="exercise-chevron" aria-hidden="true">
-                      ▾
-                    </span>
+                    {exercisesByPlan[selectedPlanId].map((exerciseName) => (
+                      <option key={exerciseName} value={exerciseName}>
+                        {exerciseName}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="picker-add-btn" onClick={addExerciseFromDropdown}>
+                    Добавить
                   </button>
+                </div>
+              </section>
+            ) : null}
 
-                  {exercise.expanded ? (
-                    <div className="set-panel">
-                      {exerciseDef ? (
-                        <div className="exercise-insight">
-                          <img
-                            className="exercise-photo"
-                            src={exerciseDef.image}
-                            alt={exercise.name}
-                            loading="lazy"
-                          />
-                          <div className="exercise-muscle-copy">
-                            <p>
-                              <strong>Основные:</strong> {primaryMuscles}
-                            </p>
-                            {secondaryMuscles ? (
-                              <p>
-                                <strong>Дополнительно:</strong> {secondaryMuscles}
-                              </p>
-                            ) : null}
+            {selectedPlanId === "custom" && isCustomBuilderOpen ? (
+              <section className="custom-program-builder action-drawer" aria-label="Конструктор своей программы">
+                <div className="builder-head">
+                  <p className="builder-title">База упражнений</p>
+                  <p className="builder-subtitle">Выбери, что добавить в свою программу</p>
+                </div>
+
+                <input
+                  className="custom-search-input"
+                  type="search"
+                  placeholder="Поиск упражнения"
+                  value={customSearch}
+                  onChange={(event) => setCustomSearch(event.target.value)}
+                />
+
+                <div className="builder-filters" aria-label="Фильтр базы упражнений">
+                  {customFilterOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`builder-filter-btn ${customFilter === option.id ? "is-active" : ""}`}
+                      onClick={() => setCustomFilter(option.id)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="builder-library">
+                  {filteredCustomSections.length === 0 ? (
+                    <p className="builder-empty">По запросу ничего не найдено.</p>
+                  ) : (
+                    filteredCustomSections.map((section) => (
+                      <div key={section.id} className="library-section">
+                        <p className="library-section-title">
+                          <span className="library-section-icon" aria-hidden="true">
+                            <AppIcon name={section.icon} className="app-icon app-icon-xs" />
+                          </span>
+                          <span>{section.title}</span>
+                        </p>
+
+                        <div className="library-items">
+                          {section.exercises.map((exerciseDef) => {
+                            const exerciseName = exerciseDef.name;
+                            const isAdded = customExerciseNameSet.has(exerciseName.toLowerCase());
+
+                            return (
+                              <button
+                                key={exerciseName}
+                                type="button"
+                                className={`library-item ${isAdded ? "is-added" : ""}`}
+                                onClick={() => toggleExerciseInCustomProgram(exerciseName)}
+                              >
+                                <span className="library-item-main">
+                                  <img src={exerciseDef.image} alt={exerciseName} className="library-item-thumb" loading="lazy" />
+                                  <span className="library-item-copy">
+                                    <span className="library-item-name">{exerciseName}</span>
+                                    <span className="library-item-muscles">{formatMuscleList(exerciseDef.primaryMuscles, 2)}</span>
+                                  </span>
+                                </span>
+                                <span className="library-item-action">{isAdded ? "Убрать" : "Добавить"}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {isRestPanelOpen || restSeconds !== null ? (
+              <section className="rest-drawer action-drawer" aria-label="Настройка отдыха">
+                <div className="rest-drawer-head">
+                  <p className="rest-label">Отдых</p>
+                  <p className="rest-value">{restSeconds !== null ? formatSeconds(restSeconds) : "Не запущен"}</p>
+                </div>
+
+                <div className="rest-input-grid">
+                  <label>
+                    Мин
+                    <input
+                      className="rest-time-input"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="0"
+                      value={restMinutesInput}
+                      onChange={(event) => setRestMinutesInput(sanitizeNumber(event.target.value, 2))}
+                    />
+                  </label>
+                  <label>
+                    Сек
+                    <input
+                      className="rest-time-input"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="00"
+                      value={restSecondsInput}
+                      onChange={(event) => setRestSecondsInput(sanitizeNumber(event.target.value, 2))}
+                    />
+                  </label>
+                </div>
+
+                <div className="rest-actions">
+                  <button type="button" className="rest-btn" onClick={startRestTimer}>
+                    Запустить
+                  </button>
+                  {restSeconds !== null ? (
+                    <button type="button" className="rest-btn is-ghost" onClick={stopRestTimer}>
+                      Остановить
+                    </button>
+                  ) : (
+                    <button type="button" className="rest-btn is-ghost" onClick={() => setIsRestPanelOpen(false)}>
+                      Скрыть
+                    </button>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {notice ? <p className="inline-notice">{notice}</p> : null}
+
+            <section className="exercise-board" aria-label="Список упражнений">
+              {activeExercises.length === 0 ? (
+                <p className="exercise-empty">
+                  {selectedPlanId === "custom"
+                    ? "Своя программа пока пустая. Открой базу упражнений и добавь нужные позиции."
+                    : "В этом дне пока нет упражнений. Добавь их через кнопку выше."}
+                </p>
+              ) : (
+                activeExercises.map((exercise) => {
+                  const exerciseDef = getExerciseDefinition(exercise.name);
+                  const primaryMuscles = exerciseDef ? formatMuscleList(exerciseDef.primaryMuscles) : "";
+                  const secondaryMuscles =
+                    exerciseDef && exerciseDef.secondaryMuscles.length > 0
+                      ? formatMuscleList(exerciseDef.secondaryMuscles, 4)
+                      : "";
+                  const prWeight = personalRecords.get(exercise.name) ?? 0;
+
+                  return (
+                    <article key={exercise.id} className={`exercise-card ${exercise.expanded ? "expanded" : ""}`}>
+                      <button
+                        type="button"
+                        className="exercise-head"
+                        onClick={() => toggleExercise(exercise.id)}
+                        aria-expanded={exercise.expanded}
+                      >
+                        <span className="exercise-icon" aria-hidden="true">
+                          <AppIcon name={selectedPlan.icon} className="app-icon app-icon-sm" />
+                        </span>
+                        <span className="exercise-text">
+                          <strong>{exercise.name}</strong>
+                          <small>{exercise.sets.length} подходов</small>
+                        </span>
+                        {prWeight > 0 ? <span className="exercise-pr">PR {prWeight} кг</span> : null}
+                        <span className="exercise-chevron" aria-hidden="true">
+                          ▾
+                        </span>
+                      </button>
+
+                      {exercise.expanded ? (
+                        <div className="set-panel">
+                          {exerciseDef ? (
+                            <div className="exercise-insight">
+                              <img className="exercise-photo" src={exerciseDef.image} alt={exercise.name} loading="lazy" />
+                              <div className="exercise-muscle-copy">
+                                <p>
+                                  <strong>Основные:</strong> {primaryMuscles}
+                                </p>
+                                {secondaryMuscles ? (
+                                  <p>
+                                    <strong>Дополнительно:</strong> {secondaryMuscles}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className="set-head">
+                            <span>№</span>
+                            <span>вес</span>
+                            <span>повт.</span>
+                            <span>дроп</span>
+                            <span>удал.</span>
+                          </div>
+
+                          {exercise.sets.map((setItem, index) => (
+                            <div key={setItem.id} className="set-group">
+                              <div className="set-row">
+                                <span className="set-index">{index + 1}</span>
+                                <input
+                                  className="set-input"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  placeholder="0"
+                                  value={setItem.weight}
+                                  onChange={(event) => updateSetValue(exercise.id, setItem.id, "weight", event.target.value)}
+                                />
+                                <input
+                                  className="set-input"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  placeholder="0"
+                                  value={setItem.reps}
+                                  onChange={(event) => updateSetValue(exercise.id, setItem.id, "reps", event.target.value)}
+                                />
+                                <button type="button" className="drop-toggle-btn" onClick={() => addDropSet(exercise.id, setItem.id)}>
+                                  дроп+
+                                </button>
+                                <button type="button" className="set-remove-btn" onClick={() => removeSet(exercise.id, setItem.id)}>
+                                  ×
+                                </button>
+                              </div>
+
+                              {setItem.dropSets.length > 0 ? (
+                                <div className="drop-board">
+                                  {setItem.dropSets.map((dropSet, dropIndex) => (
+                                    <div key={dropSet.id} className="drop-row">
+                                      <span className="drop-label">D{dropIndex + 1}</span>
+                                      <input
+                                        className="set-input drop-input"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        placeholder="0"
+                                        value={dropSet.weight}
+                                        onChange={(event) =>
+                                          updateDropSetValue(exercise.id, setItem.id, dropSet.id, "weight", event.target.value)
+                                        }
+                                      />
+                                      <input
+                                        className="set-input drop-input"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        placeholder="0"
+                                        value={dropSet.reps}
+                                        onChange={(event) =>
+                                          updateDropSetValue(exercise.id, setItem.id, dropSet.id, "reps", event.target.value)
+                                        }
+                                      />
+                                      <button
+                                        type="button"
+                                        className="drop-remove-btn"
+                                        onClick={() => removeDropSet(exercise.id, setItem.id, dropSet.id)}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+
+                          <div className="set-actions">
+                            <button type="button" className="add-set-btn" onClick={() => addSet(exercise.id)}>
+                              Добавить подход
+                            </button>
+                            <button type="button" className="remove-ex-btn" onClick={() => removeExercise(exercise.id)}>
+                              Удалить упражнение
+                            </button>
                           </div>
                         </div>
                       ) : null}
+                    </article>
+                  );
+                })
+              )}
+            </section>
+          </>
+        ) : null}
 
-                      <div className="set-head">
-                        <span>№</span>
-                        <span>вес (кг)</span>
-                        <span>повт.</span>
-                        <span>дроп</span>
+        {screen === "profile" ? (
+          <>
+            <header className="screen-head screen-head-tight">
+              <button type="button" className="icon-btn" onClick={goHome} aria-label="На главную">
+                <AppIcon name="home" className="app-icon app-icon-md" />
+              </button>
+
+              <div className="head-copy">
+                <p className="screen-kicker">Профиль</p>
+                <h2 className="screen-title-sm">Настройки и замеры</h2>
+              </div>
+
+              <button type="button" className="icon-btn" onClick={() => openWorkout(selectedPlanId)} aria-label="Открыть тренировку">
+                <AppIcon name={selectedPlan.icon} className="app-icon app-icon-md" />
+              </button>
+            </header>
+
+            <section className="profile-card">
+              <div className="profile-top">
+                <div className="profile-avatar">
+                  {userPhoto ? (
+                    <img src={userPhoto} alt={userName} className="avatar-img" />
+                  ) : (
+                    <AppIcon name="profile" className="app-icon app-icon-lg" />
+                  )}
+                </div>
+
+                <div className="profile-copy">
+                  <p className="profile-name">{userName}</p>
+                  <p className="profile-note">Заполни цель и базовые параметры</p>
+                </div>
+              </div>
+
+              <label className="profile-field">
+                <span>Цель тренировок</span>
+                <textarea
+                  className="profile-goal-input"
+                  value={profile.goal}
+                  maxLength={140}
+                  placeholder="Например: стройное тело, повышение выносливости, рост силы"
+                  onChange={(event) => updateProfileField("goal", event.target.value)}
+                />
+              </label>
+
+              <div className="metric-grid metric-grid-main">
+                <label>
+                  <span>Вес</span>
+                  <input
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={profile.weight}
+                    placeholder="кг"
+                    onChange={(event) => updateProfileField("weight", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Рост</span>
+                  <input
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={profile.height}
+                    placeholder="см"
+                    onChange={(event) => updateProfileField("height", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Возраст</span>
+                  <input
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={profile.age}
+                    placeholder="лет"
+                    onChange={(event) => updateProfileField("age", event.target.value)}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="measurements-card">
+              <div className="measurements-head">
+                <p className="section-title">Замеры</p>
+                <button type="button" className="icon-btn" onClick={addMeasurement} aria-label="Добавить замер">
+                  <AppIcon name="add" className="app-icon app-icon-sm" />
+                </button>
+              </div>
+
+              <div className="metric-grid metric-grid-measure">
+                <label>
+                  <span>Талия</span>
+                  <input
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={profile.waist}
+                    placeholder="см"
+                    onChange={(event) => updateProfileField("waist", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Ягодицы</span>
+                  <input
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={profile.hips}
+                    placeholder="см"
+                    onChange={(event) => updateProfileField("hips", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Жир</span>
+                  <input
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={profile.fat}
+                    placeholder="%"
+                    onChange={(event) => updateProfileField("fat", event.target.value)}
+                  />
+                </label>
+              </div>
+
+              <button type="button" className="secondary-btn" onClick={addMeasurement}>
+                Сохранить замер
+              </button>
+
+              <div className="measurement-list">
+                {profile.measurements.length === 0 ? (
+                  <p className="empty-state">История замеров пока пустая.</p>
+                ) : (
+                  profile.measurements.map((entry) => (
+                    <article key={entry.id} className="measurement-row">
+                      <div className="measurement-date">{entry.date}</div>
+                      <div className="measurement-values">
+                        <span>{formatMetric(entry.weight, " кг")}</span>
+                        <span>{formatMetric(entry.waist, " см")}</span>
+                        <span>{formatMetric(entry.hips, " см")}</span>
+                        <span>{formatMetric(entry.fat, "%")}</span>
                       </div>
+                      <button type="button" className="ghost-btn" onClick={() => removeMeasurement(entry.id)}>
+                        Удалить
+                      </button>
+                    </article>
+                  ))
+                )}
+              </div>
+            </section>
 
-                      {exercise.sets.map((setItem, index) => (
-                        <div key={setItem.id} className="set-group">
-                          <div className="set-row">
-                            <span className="set-index">{index + 1}</span>
-                            <input
-                              className="set-input"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              placeholder="0"
-                              value={setItem.weight}
-                              onChange={(event) => updateSetValue(exercise.id, setItem.id, "weight", event.target.value)}
-                            />
-                            <input
-                              className="set-input"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              placeholder="0"
-                              value={setItem.reps}
-                              onChange={(event) => updateSetValue(exercise.id, setItem.id, "reps", event.target.value)}
-                            />
-                            <button type="button" className="drop-toggle-btn" onClick={() => addDropSet(exercise.id, setItem.id)}>
-                              дроп+
-                            </button>
-                          </div>
-
-                          {setItem.dropSets.length > 0 ? (
-                            <div className="drop-board">
-                              {setItem.dropSets.map((dropSet, dropIndex) => (
-                                <div key={dropSet.id} className="drop-row">
-                                  <span className="drop-label">D{dropIndex + 1}</span>
-                                  <input
-                                    className="set-input drop-input"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    placeholder="0"
-                                    value={dropSet.weight}
-                                    onChange={(event) =>
-                                      updateDropSetValue(exercise.id, setItem.id, dropSet.id, "weight", event.target.value)
-                                    }
-                                  />
-                                  <input
-                                    className="set-input drop-input"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    placeholder="0"
-                                    value={dropSet.reps}
-                                    onChange={(event) =>
-                                      updateDropSetValue(exercise.id, setItem.id, dropSet.id, "reps", event.target.value)
-                                    }
-                                  />
-                                  <button
-                                    type="button"
-                                    className="drop-remove-btn"
-                                    onClick={() => removeDropSet(exercise.id, setItem.id, dropSet.id)}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-
-                      <div className="set-actions">
-                        <button type="button" className="add-set-btn" onClick={() => addSet(exercise.id)}>
-                          Добавить подход
-                        </button>
-                        <button type="button" className="remove-ex-btn" onClick={() => removeExercise(exercise.id)}>
-                          Удалить
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })
-          )}
-        </section>
+            {notice ? <p className="inline-notice">{notice}</p> : null}
+          </>
+        ) : null}
       </main>
+
+      <nav className="bottom-nav" aria-label="Навигация">
+        <button type="button" className={`nav-btn ${screen === "home" ? "is-active" : ""}`} onClick={goHome}>
+          <AppIcon name="home" className="app-icon app-icon-sm" />
+          <span>Главная</span>
+        </button>
+
+        <button
+          type="button"
+          className={`nav-btn ${screen === "workout" ? "is-active" : ""}`}
+          onClick={() => openWorkout(selectedPlanId)}
+        >
+          <AppIcon name={selectedPlan.icon} className="app-icon app-icon-sm" />
+          <span>Тренировка</span>
+        </button>
+
+        <button type="button" className={`nav-btn ${screen === "profile" ? "is-active" : ""}`} onClick={openProfile}>
+          <AppIcon name="profile" className="app-icon app-icon-sm" />
+          <span>Профиль</span>
+        </button>
+      </nav>
     </div>
   );
 }
