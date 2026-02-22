@@ -719,8 +719,10 @@ export default function App() {
   const [expandedLibrarySections, setExpandedLibrarySections] = useState<BasePlanId[]>(() =>
     customLibrarySections.map((section) => section.id),
   );
+  const [swipedPlanId, setSwipedPlanId] = useState<DayPlanId | null>(null);
   const [swipedCustomProgramId, setSwipedCustomProgramId] = useState<string | null>(null);
-  const customSwipeStartRef = useRef<{ programId: string; x: number } | null>(null);
+  const planSwipeStartRef = useRef<{ planId: DayPlanId; x: number; y: number } | null>(null);
+  const customSwipeStartRef = useRef<{ programId: string; x: number; y: number } | null>(null);
   const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
     upper: exercisesByPlan.upper[0] ?? "",
     lower: exercisesByPlan.lower[0] ?? "",
@@ -1333,21 +1335,54 @@ export default function App() {
     triggerImpact("light");
   }
 
-  function startCustomProgramSwipe(programId: string, clientX: number) {
-    customSwipeStartRef.current = { programId, x: clientX };
+  function startPlanSwipe(planId: DayPlanId, clientX: number, clientY: number) {
+    planSwipeStartRef.current = { planId, x: clientX, y: clientY };
   }
 
-  function moveCustomProgramSwipe(programId: string, clientX: number) {
-    const swipe = customSwipeStartRef.current;
-    if (!swipe || swipe.programId !== programId) return;
+  function movePlanSwipe(planId: DayPlanId, clientX: number, clientY: number) {
+    const swipe = planSwipeStartRef.current;
+    if (!swipe || swipe.planId !== planId) return;
 
-    const delta = clientX - swipe.x;
-    if (delta <= -56) {
-      setSwipedCustomProgramId(programId);
+    const deltaX = clientX - swipe.x;
+    const deltaY = clientY - swipe.y;
+    if (Math.abs(deltaY) > Math.abs(deltaX) + 6) return;
+
+    if (deltaX <= -36) {
+      setSwipedPlanId(planId);
+      setSwipedCustomProgramId(null);
       return;
     }
 
-    if (delta >= 24 && swipedCustomProgramId === programId) {
+    if (deltaX >= 20 && swipedPlanId === planId) {
+      setSwipedPlanId(null);
+    }
+  }
+
+  function endPlanSwipe(planId: DayPlanId) {
+    if (planSwipeStartRef.current?.planId === planId) {
+      planSwipeStartRef.current = null;
+    }
+  }
+
+  function startCustomProgramSwipe(programId: string, clientX: number, clientY: number) {
+    customSwipeStartRef.current = { programId, x: clientX, y: clientY };
+  }
+
+  function moveCustomProgramSwipe(programId: string, clientX: number, clientY: number) {
+    const swipe = customSwipeStartRef.current;
+    if (!swipe || swipe.programId !== programId) return;
+
+    const deltaX = clientX - swipe.x;
+    const deltaY = clientY - swipe.y;
+    if (Math.abs(deltaY) > Math.abs(deltaX) + 6) return;
+
+    if (deltaX <= -36) {
+      setSwipedCustomProgramId(programId);
+      setSwipedPlanId(null);
+      return;
+    }
+
+    if (deltaX >= 20 && swipedCustomProgramId === programId) {
       setSwipedCustomProgramId(null);
     }
   }
@@ -1369,9 +1404,21 @@ export default function App() {
         setSelectedPlanId("upper");
       }
     }
+    setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
     setPendingDeleteCustomProgramId(null);
     setNotice(`Удалена программа: ${target.name}`);
+    triggerImpact("soft");
+  }
+
+  function deletePlanWorkout(planId: DayPlanId) {
+    if (planId === "custom") return;
+
+    const planTitle = dayPlanById[planId].title;
+    updateExercisesForPlan(planId, () => []);
+    setSwipedPlanId(null);
+    setSwipedCustomProgramId(null);
+    setNotice(`Удалена тренировка: ${planTitle}`);
     triggerImpact("soft");
   }
 
@@ -1735,20 +1782,61 @@ export default function App() {
               ) : (
                 <div className="saved-list">
                   {plansWithWorkouts.map((plan) => (
-                    <article key={plan.id} className="saved-card">
-                      <span className="saved-icon" aria-hidden="true">
-                        <AppIcon name={plan.icon} className="app-icon app-icon-sm" />
-                      </span>
-                      <div className="saved-copy">
-                        <strong>{plan.title}</strong>
-                        <small>
-                          {sessionByPlan[plan.id].length} упражнений · {setCountsByPlan[plan.id]} подходов
-                        </small>
-                      </div>
-                      <button type="button" className="ghost-btn" onClick={() => openWorkout(plan.id, { logEvent: true })}>
-                        Открыть
+                    <div key={plan.id} className={`custom-swipe-row ${swipedPlanId === plan.id ? "is-open" : ""}`}>
+                      <button type="button" className="custom-swipe-delete-btn" onClick={() => deletePlanWorkout(plan.id)}>
+                        Удалить
                       </button>
-                    </article>
+
+                      <article
+                        className="saved-card custom-swipe-card"
+                        onTouchStart={(event) =>
+                          startPlanSwipe(plan.id, event.touches[0]?.clientX ?? 0, event.touches[0]?.clientY ?? 0)
+                        }
+                        onTouchMove={(event) =>
+                          movePlanSwipe(plan.id, event.touches[0]?.clientX ?? 0, event.touches[0]?.clientY ?? 0)
+                        }
+                        onTouchEnd={() => endPlanSwipe(plan.id)}
+                        onTouchCancel={() => endPlanSwipe(plan.id)}
+                        onPointerDown={(event) => {
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                          startPlanSwipe(plan.id, event.clientX, event.clientY);
+                        }}
+                        onPointerMove={(event) => movePlanSwipe(plan.id, event.clientX, event.clientY)}
+                        onPointerUp={(event) => {
+                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                            event.currentTarget.releasePointerCapture(event.pointerId);
+                          }
+                          endPlanSwipe(plan.id);
+                        }}
+                        onPointerCancel={(event) => {
+                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                            event.currentTarget.releasePointerCapture(event.pointerId);
+                          }
+                          endPlanSwipe(plan.id);
+                        }}
+                      >
+                        <span className="saved-icon" aria-hidden="true">
+                          <AppIcon name={plan.icon} className="app-icon app-icon-sm" />
+                        </span>
+                        <div className="saved-copy">
+                          <strong>{plan.title}</strong>
+                          <small>
+                            {sessionByPlan[plan.id].length} упражнений · {setCountsByPlan[plan.id]} подходов
+                          </small>
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          onClick={() => {
+                            setSwipedPlanId(null);
+                            setSwipedCustomProgramId(null);
+                            openWorkout(plan.id, { logEvent: true });
+                          }}
+                        >
+                          Открыть
+                        </button>
+                      </article>
+                    </div>
                   ))}
 
                   {customPrograms.map((program) => (
@@ -1766,14 +1854,31 @@ export default function App() {
 
                       <article
                         className="saved-card custom-swipe-card"
-                        onTouchStart={(event) => startCustomProgramSwipe(program.id, event.touches[0]?.clientX ?? 0)}
-                        onTouchMove={(event) => moveCustomProgramSwipe(program.id, event.touches[0]?.clientX ?? 0)}
+                        onTouchStart={(event) =>
+                          startCustomProgramSwipe(program.id, event.touches[0]?.clientX ?? 0, event.touches[0]?.clientY ?? 0)
+                        }
+                        onTouchMove={(event) =>
+                          moveCustomProgramSwipe(program.id, event.touches[0]?.clientX ?? 0, event.touches[0]?.clientY ?? 0)
+                        }
                         onTouchEnd={() => endCustomProgramSwipe(program.id)}
                         onTouchCancel={() => endCustomProgramSwipe(program.id)}
-                        onPointerDown={(event) => startCustomProgramSwipe(program.id, event.clientX)}
-                        onPointerMove={(event) => moveCustomProgramSwipe(program.id, event.clientX)}
-                        onPointerUp={() => endCustomProgramSwipe(program.id)}
-                        onPointerCancel={() => endCustomProgramSwipe(program.id)}
+                        onPointerDown={(event) => {
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                          startCustomProgramSwipe(program.id, event.clientX, event.clientY);
+                        }}
+                        onPointerMove={(event) => moveCustomProgramSwipe(program.id, event.clientX, event.clientY)}
+                        onPointerUp={(event) => {
+                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                            event.currentTarget.releasePointerCapture(event.pointerId);
+                          }
+                          endCustomProgramSwipe(program.id);
+                        }}
+                        onPointerCancel={(event) => {
+                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                            event.currentTarget.releasePointerCapture(event.pointerId);
+                          }
+                          endCustomProgramSwipe(program.id);
+                        }}
                       >
                         <span className="saved-icon" aria-hidden="true">
                           <AppIcon name="custom" className="app-icon app-icon-sm" />
@@ -1786,6 +1891,7 @@ export default function App() {
                           type="button"
                           className="ghost-btn"
                           onClick={() => {
+                            setSwipedPlanId(null);
                             setSwipedCustomProgramId(null);
                             openWorkout("custom", { customProgramId: program.id, logEvent: true });
                           }}

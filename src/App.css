@@ -180,21 +180,21 @@
 }
 
 .home-calendar {
-  padding: 8px;
+  padding: 6px;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .home-calendar-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .home-calendar-month {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--text-sub);
   text-transform: capitalize;
 }
@@ -203,24 +203,24 @@
 .home-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 3px;
+  gap: 2px;
 }
 
 .home-calendar-week span {
   text-align: center;
-  font-size: 0.62rem;
+  font-size: 0.56rem;
   font-weight: 700;
   color: var(--text-sub);
 }
 
 .home-calendar-day {
-  min-height: 26px;
-  border-radius: 8px;
+  min-height: 20px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
   background: var(--input-bg);
   color: var(--text-main);
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   font-weight: 700;
   position: relative;
 }
@@ -238,12 +238,12 @@
 }
 
 .home-calendar-day.has-workout i {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
   background: var(--accent);
   position: absolute;
-  bottom: 3px;
+  bottom: 2px;
 }
 
 .primary-btn,
