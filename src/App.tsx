@@ -721,8 +721,10 @@ export default function App() {
   );
   const [swipedPlanId, setSwipedPlanId] = useState<DayPlanId | null>(null);
   const [swipedCustomProgramId, setSwipedCustomProgramId] = useState<string | null>(null);
+  const [swipedExerciseId, setSwipedExerciseId] = useState<string | null>(null);
   const planSwipeStartRef = useRef<{ planId: DayPlanId; x: number; y: number } | null>(null);
   const customSwipeStartRef = useRef<{ programId: string; x: number; y: number } | null>(null);
+  const exerciseSwipeStartRef = useRef<{ exerciseId: string; x: number; y: number } | null>(null);
   const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
     upper: exercisesByPlan.upper[0] ?? "",
     lower: exercisesByPlan.lower[0] ?? "",
@@ -938,6 +940,10 @@ export default function App() {
     return () => window.clearTimeout(timerId);
   }, [restSeconds, tg]);
 
+  useEffect(() => {
+    setSwipedExerciseId(null);
+  }, [selectedPlanId, selectedCustomProgramId, screen]);
+
   function triggerImpact(style: "light" | "medium" | "heavy" | "rigid" | "soft" = "light") {
     tg?.HapticFeedback?.impactOccurred?.(style);
   }
@@ -963,7 +969,9 @@ export default function App() {
   function openWorkout(planId: DayPlanId, options?: { customProgramId?: string; logEvent?: boolean }) {
     setSelectedPlanId(planId);
     setPendingDeleteCustomProgramId(null);
+    setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
+    setSwipedExerciseId(null);
     if (planId === "custom") {
       const targetCustomId =
         options?.customProgramId ?? effectiveCustomProgramId ?? customPrograms[0]?.id ?? null;
@@ -997,7 +1005,9 @@ export default function App() {
   function goHome() {
     setScreen("home");
     setPendingDeleteCustomProgramId(null);
+    setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
+    setSwipedExerciseId(null);
     setIsCreateWorkoutOpen(false);
     closeWorkoutDrawers();
   }
@@ -1005,7 +1015,9 @@ export default function App() {
   function openProgress() {
     setScreen("progress");
     setPendingDeleteCustomProgramId(null);
+    setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
+    setSwipedExerciseId(null);
     setIsCreateWorkoutOpen(false);
     closeWorkoutDrawers();
   }
@@ -1026,7 +1038,9 @@ export default function App() {
     setSelectedCustomProgramId(program.id);
     setSelectedPlanId("custom");
     setPendingDeleteCustomProgramId(null);
+    setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
+    setSwipedExerciseId(null);
     setScreen("workout");
     setIsCreateWorkoutOpen(false);
     setIsCustomBuilderOpen(true);
@@ -1152,6 +1166,7 @@ export default function App() {
 
   function removeExercise(exerciseId: string) {
     updateExercisesForPlan(selectedPlanId, (prev) => prev.filter((exercise) => exercise.id !== exerciseId));
+    setSwipedExerciseId(null);
     setNotice("Упражнение удалено");
     triggerImpact("soft");
   }
@@ -1350,6 +1365,7 @@ export default function App() {
     if (deltaX <= -36) {
       setSwipedPlanId(planId);
       setSwipedCustomProgramId(null);
+      setSwipedExerciseId(null);
       return;
     }
 
@@ -1379,6 +1395,7 @@ export default function App() {
     if (deltaX <= -36) {
       setSwipedCustomProgramId(programId);
       setSwipedPlanId(null);
+      setSwipedExerciseId(null);
       return;
     }
 
@@ -1390,6 +1407,36 @@ export default function App() {
   function endCustomProgramSwipe(programId: string) {
     if (customSwipeStartRef.current?.programId === programId) {
       customSwipeStartRef.current = null;
+    }
+  }
+
+  function startExerciseSwipe(exerciseId: string, clientX: number, clientY: number) {
+    exerciseSwipeStartRef.current = { exerciseId, x: clientX, y: clientY };
+  }
+
+  function moveExerciseSwipe(exerciseId: string, clientX: number, clientY: number) {
+    const swipe = exerciseSwipeStartRef.current;
+    if (!swipe || swipe.exerciseId !== exerciseId) return;
+
+    const deltaX = clientX - swipe.x;
+    const deltaY = clientY - swipe.y;
+    if (Math.abs(deltaY) > Math.abs(deltaX) + 6) return;
+
+    if (deltaX <= -32) {
+      setSwipedExerciseId(exerciseId);
+      setSwipedPlanId(null);
+      setSwipedCustomProgramId(null);
+      return;
+    }
+
+    if (deltaX >= 18 && swipedExerciseId === exerciseId) {
+      setSwipedExerciseId(null);
+    }
+  }
+
+  function endExerciseSwipe(exerciseId: string) {
+    if (exerciseSwipeStartRef.current?.exerciseId === exerciseId) {
+      exerciseSwipeStartRef.current = null;
     }
   }
 
@@ -1406,6 +1453,7 @@ export default function App() {
     }
     setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
+    setSwipedExerciseId(null);
     setPendingDeleteCustomProgramId(null);
     setNotice(`Удалена программа: ${target.name}`);
     triggerImpact("soft");
@@ -1418,6 +1466,7 @@ export default function App() {
     updateExercisesForPlan(planId, () => []);
     setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
+    setSwipedExerciseId(null);
     setNotice(`Удалена тренировка: ${planTitle}`);
     triggerImpact("soft");
   }
@@ -1830,6 +1879,7 @@ export default function App() {
                           onClick={() => {
                             setSwipedPlanId(null);
                             setSwipedCustomProgramId(null);
+                            setSwipedExerciseId(null);
                             openWorkout(plan.id, { logEvent: true });
                           }}
                         >
@@ -1893,6 +1943,7 @@ export default function App() {
                           onClick={() => {
                             setSwipedPlanId(null);
                             setSwipedCustomProgramId(null);
+                            setSwipedExerciseId(null);
                             openWorkout("custom", { customProgramId: program.id, logEvent: true });
                           }}
                         >
@@ -2323,17 +2374,54 @@ export default function App() {
                   const prWeight = personalRecords.get(exercise.name) ?? 0;
 
                   return (
-                    <article
+                    <div
                       key={exercise.id}
-                      className={`exercise-card ${exercise.expanded ? "expanded is-focused" : ""} ${
-                        expandedExerciseId && !exercise.expanded ? "is-dimmed" : ""
-                      }`}
+                      className={`exercise-swipe-row ${swipedExerciseId === exercise.id ? "is-open" : ""}`}
                     >
+                      <button
+                        type="button"
+                        className="exercise-swipe-delete-btn"
+                        onClick={() => removeExercise(exercise.id)}
+                        aria-label={`Удалить упражнение ${exercise.name}`}
+                      >
+                        Удалить
+                      </button>
+
+                      <article
+                        className={`exercise-card exercise-swipe-card ${exercise.expanded ? "expanded is-focused" : ""} ${
+                          expandedExerciseId && !exercise.expanded ? "is-dimmed" : ""
+                        }`}
+                      >
                       <button
                         type="button"
                         className="exercise-head"
                         onClick={() => toggleExercise(exercise.id)}
                         aria-expanded={exercise.expanded}
+                        onTouchStart={(event) =>
+                          startExerciseSwipe(exercise.id, event.touches[0]?.clientX ?? 0, event.touches[0]?.clientY ?? 0)
+                        }
+                        onTouchMove={(event) =>
+                          moveExerciseSwipe(exercise.id, event.touches[0]?.clientX ?? 0, event.touches[0]?.clientY ?? 0)
+                        }
+                        onTouchEnd={() => endExerciseSwipe(exercise.id)}
+                        onTouchCancel={() => endExerciseSwipe(exercise.id)}
+                        onPointerDown={(event) => {
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                          startExerciseSwipe(exercise.id, event.clientX, event.clientY);
+                        }}
+                        onPointerMove={(event) => moveExerciseSwipe(exercise.id, event.clientX, event.clientY)}
+                        onPointerUp={(event) => {
+                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                            event.currentTarget.releasePointerCapture(event.pointerId);
+                          }
+                          endExerciseSwipe(exercise.id);
+                        }}
+                        onPointerCancel={(event) => {
+                          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                            event.currentTarget.releasePointerCapture(event.pointerId);
+                          }
+                          endExerciseSwipe(exercise.id);
+                        }}
                       >
                         <span className="exercise-icon" aria-hidden="true">
                           <AppIcon name={selectedPlan.icon} className="app-icon app-icon-sm" />
@@ -2489,7 +2577,8 @@ export default function App() {
                           </div>
                         </div>
                       ) : null}
-                    </article>
+                      </article>
+                    </div>
                   );
                 })
               )}

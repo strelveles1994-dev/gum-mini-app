@@ -447,6 +447,38 @@
   transform: translateX(-92px);
 }
 
+.exercise-swipe-row {
+  position: relative;
+  overflow: hidden;
+}
+
+.exercise-swipe-delete-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 96px;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(130deg, #d4435a, #b31f3a);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.exercise-swipe-card {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.2s ease;
+  touch-action: pan-y;
+}
+
+.exercise-swipe-row.is-open .exercise-swipe-card {
+  transform: translateX(-96px);
+}
+
 .saved-icon {
   width: 30px;
   height: 30px;
@@ -998,6 +1030,10 @@
 }
 
 .exercise-card:last-child {
+  border-bottom: 0;
+}
+
+.exercise-swipe-row:last-child .exercise-card {
   border-bottom: 0;
 }
 
