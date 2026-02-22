@@ -1,5 +1,5 @@
 ﻿
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import {
   baseExercisesByPlan,
@@ -719,6 +719,8 @@ export default function App() {
   const [expandedLibrarySections, setExpandedLibrarySections] = useState<BasePlanId[]>(() =>
     customLibrarySections.map((section) => section.id),
   );
+  const [swipedCustomProgramId, setSwipedCustomProgramId] = useState<string | null>(null);
+  const customSwipeStartRef = useRef<{ programId: string; x: number } | null>(null);
   const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
     upper: exercisesByPlan.upper[0] ?? "",
     lower: exercisesByPlan.lower[0] ?? "",
@@ -958,6 +960,7 @@ export default function App() {
   function openWorkout(planId: DayPlanId, options?: { customProgramId?: string; logEvent?: boolean }) {
     setSelectedPlanId(planId);
     setPendingDeleteCustomProgramId(null);
+    setSwipedCustomProgramId(null);
     if (planId === "custom") {
       const targetCustomId =
         options?.customProgramId ?? effectiveCustomProgramId ?? customPrograms[0]?.id ?? null;
@@ -991,6 +994,7 @@ export default function App() {
   function goHome() {
     setScreen("home");
     setPendingDeleteCustomProgramId(null);
+    setSwipedCustomProgramId(null);
     setIsCreateWorkoutOpen(false);
     closeWorkoutDrawers();
   }
@@ -998,6 +1002,7 @@ export default function App() {
   function openProgress() {
     setScreen("progress");
     setPendingDeleteCustomProgramId(null);
+    setSwipedCustomProgramId(null);
     setIsCreateWorkoutOpen(false);
     closeWorkoutDrawers();
   }
@@ -1018,6 +1023,7 @@ export default function App() {
     setSelectedCustomProgramId(program.id);
     setSelectedPlanId("custom");
     setPendingDeleteCustomProgramId(null);
+    setSwipedCustomProgramId(null);
     setScreen("workout");
     setIsCreateWorkoutOpen(false);
     setIsCustomBuilderOpen(true);
@@ -1344,6 +1350,48 @@ export default function App() {
     closeWorkoutDrawers();
     setNotice("Программа сохранена");
     triggerImpact("medium");
+  }
+
+  function startCustomProgramSwipe(programId: string, clientX: number) {
+    customSwipeStartRef.current = { programId, x: clientX };
+  }
+
+  function moveCustomProgramSwipe(programId: string, clientX: number) {
+    const swipe = customSwipeStartRef.current;
+    if (!swipe || swipe.programId !== programId) return;
+
+    const delta = clientX - swipe.x;
+    if (delta >= 56) {
+      setSwipedCustomProgramId(programId);
+      return;
+    }
+
+    if (delta <= -24 && swipedCustomProgramId === programId) {
+      setSwipedCustomProgramId(null);
+    }
+  }
+
+  function endCustomProgramSwipe(programId: string) {
+    if (customSwipeStartRef.current?.programId === programId) {
+      customSwipeStartRef.current = null;
+    }
+  }
+
+  function deleteCustomProgram(programId: string) {
+    const target = customPrograms.find((program) => program.id === programId);
+    if (!target) return;
+
+    setCustomPrograms((prev) => prev.filter((program) => program.id !== programId));
+    if (selectedCustomProgramId === programId) {
+      setSelectedCustomProgramId(null);
+      if (selectedPlanId === "custom") {
+        setSelectedPlanId("upper");
+      }
+    }
+    setSwipedCustomProgramId(null);
+    setPendingDeleteCustomProgramId(null);
+    setNotice(`Удалена программа: ${target.name}`);
+    triggerImpact("soft");
   }
 
   function startRestTimer() {
@@ -1723,22 +1771,48 @@ export default function App() {
                   ))}
 
                   {customPrograms.map((program) => (
-                    <article key={program.id} className="saved-card">
-                      <span className="saved-icon" aria-hidden="true">
-                        <AppIcon name="custom" className="app-icon app-icon-sm" />
-                      </span>
-                      <div className="saved-copy">
-                        <strong>{program.name}</strong>
-                        <small>{program.exercises.length} упражнений</small>
-                      </div>
+                    <div
+                      key={program.id}
+                      className={`custom-swipe-row ${swipedCustomProgramId === program.id ? "is-open" : ""}`}
+                    >
                       <button
                         type="button"
-                        className="ghost-btn"
-                        onClick={() => openWorkout("custom", { customProgramId: program.id, logEvent: true })}
+                        className="custom-swipe-delete-btn"
+                        onClick={() => deleteCustomProgram(program.id)}
                       >
-                        Открыть
+                        Удалить
                       </button>
-                    </article>
+
+                      <article
+                        className="saved-card custom-swipe-card"
+                        onTouchStart={(event) => startCustomProgramSwipe(program.id, event.touches[0]?.clientX ?? 0)}
+                        onTouchMove={(event) => moveCustomProgramSwipe(program.id, event.touches[0]?.clientX ?? 0)}
+                        onTouchEnd={() => endCustomProgramSwipe(program.id)}
+                        onTouchCancel={() => endCustomProgramSwipe(program.id)}
+                        onPointerDown={(event) => startCustomProgramSwipe(program.id, event.clientX)}
+                        onPointerMove={(event) => moveCustomProgramSwipe(program.id, event.clientX)}
+                        onPointerUp={() => endCustomProgramSwipe(program.id)}
+                        onPointerCancel={() => endCustomProgramSwipe(program.id)}
+                      >
+                        <span className="saved-icon" aria-hidden="true">
+                          <AppIcon name="custom" className="app-icon app-icon-sm" />
+                        </span>
+                        <div className="saved-copy">
+                          <strong>{program.name}</strong>
+                          <small>{program.exercises.length} упражнений</small>
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          onClick={() => {
+                            setSwipedCustomProgramId(null);
+                            openWorkout("custom", { customProgramId: program.id, logEvent: true });
+                          }}
+                        >
+                          Открыть
+                        </button>
+                      </article>
+                    </div>
                   ))}
                 </div>
               )}
@@ -1802,58 +1876,76 @@ export default function App() {
 
             <section className="quick-actions" aria-label="Быстрые действия">
               {selectedPlanId === "custom" ? (
-                <button
-                  type="button"
-                  className={`action-btn ${isCustomBuilderOpen ? "is-active" : ""}`}
-                  onClick={() => setIsCustomBuilderOpen((prev) => !prev)}
-                >
-                  <span>База упражнений</span>
-                  <span className="action-hint action-hint-with-icon">
-                    <span>{isCustomBuilderOpen ? "Скрыть" : "Открыть"}</span>
-                    <span className={`action-toggle-icon ${isCustomBuilderOpen ? "is-open" : ""}`} aria-hidden="true">
-                      ▾
+                <>
+                  <button
+                    type="button"
+                    className={`action-btn ${isCustomBuilderOpen ? "is-active" : ""}`}
+                    onClick={() => setIsCustomBuilderOpen((prev) => !prev)}
+                  >
+                    <span>Редактировать программу</span>
+                    <span className="action-hint action-hint-with-icon">
+                      <span>{isCustomBuilderOpen ? "Скрыть" : "Открыть"}</span>
+                      <span className={`action-toggle-icon ${isCustomBuilderOpen ? "is-open" : ""}`} aria-hidden="true">
+                        ▾
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
+                    onClick={() => setIsRestPanelOpen((prev) => !prev)}
+                  >
+                    <span>Отдых</span>
+                    <span className="action-hint action-hint-with-icon">
+                      <span>{restSeconds !== null ? formatSeconds(restSeconds) : "мин/сек"}</span>
+                      <span className={`action-toggle-icon ${isRestPanelOpen ? "is-open" : ""}`} aria-hidden="true">
+                        ▾
+                      </span>
+                    </span>
+                  </button>
+                </>
               ) : (
-                <button
-                  type="button"
-                  className={`action-btn ${isExercisePickerOpen ? "is-active" : ""}`}
-                  onClick={() => setIsExercisePickerOpen((prev) => !prev)}
-                >
-                  <span>Добавить упражнение</span>
-                  <span className="action-hint action-hint-with-icon">
-                    <span>{isExercisePickerOpen ? "Скрыть" : "Открыть"}</span>
-                    <span className={`action-toggle-icon ${isExercisePickerOpen ? "is-open" : ""}`} aria-hidden="true">
-                      ▾
+                <>
+                  <button
+                    type="button"
+                    className={`action-btn ${isExercisePickerOpen ? "is-active" : ""}`}
+                    onClick={() => setIsExercisePickerOpen((prev) => !prev)}
+                  >
+                    <span>Добавить упражнение</span>
+                    <span className="action-hint action-hint-with-icon">
+                      <span>{isExercisePickerOpen ? "Скрыть" : "Открыть"}</span>
+                      <span className={`action-toggle-icon ${isExercisePickerOpen ? "is-open" : ""}`} aria-hidden="true">
+                        ▾
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
+                    onClick={() => setIsRestPanelOpen((prev) => !prev)}
+                  >
+                    <span>Отдых</span>
+                    <span className="action-hint action-hint-with-icon">
+                      <span>{restSeconds !== null ? formatSeconds(restSeconds) : "мин/сек"}</span>
+                      <span className={`action-toggle-icon ${isRestPanelOpen ? "is-open" : ""}`} aria-hidden="true">
+                        ▾
+                      </span>
+                    </span>
+                  </button>
+
+                  <button type="button" className="action-btn" onClick={clearCurrentPlan}>
+                    <span>Очистить день</span>
+                    <span className="action-hint">{activeExercises.length}</span>
+                  </button>
+
+                  <button type="button" className="action-btn action-btn-save" onClick={saveWorkoutSetup}>
+                    <span>Сохранить</span>
+                    <span className="action-hint">Скрыть списки</span>
+                  </button>
+                </>
               )}
-
-              <button
-                type="button"
-                className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
-                onClick={() => setIsRestPanelOpen((prev) => !prev)}
-              >
-                <span>Отдых</span>
-                <span className="action-hint action-hint-with-icon">
-                  <span>{restSeconds !== null ? formatSeconds(restSeconds) : "мин/сек"}</span>
-                  <span className={`action-toggle-icon ${isRestPanelOpen ? "is-open" : ""}`} aria-hidden="true">
-                    ▾
-                  </span>
-                </span>
-              </button>
-
-              <button type="button" className="action-btn" onClick={clearCurrentPlan}>
-                <span>Очистить день</span>
-                <span className="action-hint">{activeExercises.length}</span>
-              </button>
-
-              <button type="button" className="action-btn action-btn-save" onClick={saveWorkoutSetup}>
-                <span>Сохранить</span>
-                <span className="action-hint">Скрыть списки</span>
-              </button>
             </section>
 
             {selectedPlanId !== "custom" && isExercisePickerOpen ? (
@@ -2127,7 +2219,7 @@ export default function App() {
               {activeExercises.length === 0 ? (
                 <p className="exercise-empty">
                   {selectedPlanId === "custom"
-                    ? "Своя программа пока пустая. Открой базу упражнений и добавь нужные позиции."
+                    ? "Своя программа пока пустая. Нажми «Редактировать программу» и добавь упражнения."
                     : "В этом дне пока нет упражнений. Добавь их через кнопку выше."}
                 </p>
               ) : (

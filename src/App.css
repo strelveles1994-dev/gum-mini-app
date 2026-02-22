@@ -414,6 +414,39 @@
   padding: 8px;
 }
 
+.custom-swipe-row {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.custom-swipe-delete-btn {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 92px;
+  border: 0;
+  border-radius: 12px 0 0 12px;
+  background: linear-gradient(130deg, #d4435a, #b31f3a);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.custom-swipe-card {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.2s ease;
+  touch-action: pan-y;
+}
+
+.custom-swipe-row.is-open .custom-swipe-card {
+  transform: translateX(92px);
+}
+
 .saved-icon {
   width: 30px;
   height: 30px;
