@@ -704,7 +704,7 @@ export default function App() {
   const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
   const [isCustomBuilderOpen, setIsCustomBuilderOpen] = useState(false);
   const [isRestPanelOpen, setIsRestPanelOpen] = useState(false);
-  const [isWorkoutEditing, setIsWorkoutEditing] = useState(false);
+  const [pendingDeleteCustomProgramId, setPendingDeleteCustomProgramId] = useState<string | null>(null);
   const [restMinutesInput, setRestMinutesInput] = useState(() => String(Math.floor(DEFAULT_REST_SECONDS / 60)));
   const [restSecondsInput, setRestSecondsInput] = useState(() => String(DEFAULT_REST_SECONDS % 60).padStart(2, "0"));
   const [restSeconds, setRestSeconds] = useState<number | null>(null);
@@ -727,13 +727,7 @@ export default function App() {
     custom: exercisesByPlan.custom[0] ?? "",
   });
 
-  const visibleCustomPrograms = useMemo(
-    () => customPrograms.filter((program) => program.exercises.length > 0),
-    [customPrograms],
-  );
-
-  const effectiveCustomProgramId =
-    selectedCustomProgramId ?? visibleCustomPrograms[0]?.id ?? customPrograms[0]?.id ?? null;
+  const effectiveCustomProgramId = selectedCustomProgramId ?? customPrograms[0]?.id ?? null;
   const selectedCustomProgram =
     effectiveCustomProgramId !== null
       ? customPrograms.find((program) => program.id === effectiveCustomProgramId) ?? null
@@ -963,14 +957,10 @@ export default function App() {
 
   function openWorkout(planId: DayPlanId, options?: { customProgramId?: string; logEvent?: boolean }) {
     setSelectedPlanId(planId);
-    setIsWorkoutEditing(false);
+    setPendingDeleteCustomProgramId(null);
     if (planId === "custom") {
       const targetCustomId =
-        options?.customProgramId ??
-        effectiveCustomProgramId ??
-        visibleCustomPrograms[0]?.id ??
-        customPrograms[0]?.id ??
-        null;
+        options?.customProgramId ?? effectiveCustomProgramId ?? customPrograms[0]?.id ?? null;
       setSelectedCustomProgramId(targetCustomId);
       const targetProgram = customPrograms.find((program) => program.id === targetCustomId);
       setCustomWorkoutNameInput(targetProgram?.name ?? "");
@@ -1000,14 +990,14 @@ export default function App() {
 
   function goHome() {
     setScreen("home");
-    setIsWorkoutEditing(false);
+    setPendingDeleteCustomProgramId(null);
     setIsCreateWorkoutOpen(false);
     closeWorkoutDrawers();
   }
 
   function openProgress() {
     setScreen("progress");
-    setIsWorkoutEditing(false);
+    setPendingDeleteCustomProgramId(null);
     setIsCreateWorkoutOpen(false);
     closeWorkoutDrawers();
   }
@@ -1027,7 +1017,7 @@ export default function App() {
     setCustomWorkoutNameInput(program.name);
     setSelectedCustomProgramId(program.id);
     setSelectedPlanId("custom");
-    setIsWorkoutEditing(true);
+    setPendingDeleteCustomProgramId(null);
     setScreen("workout");
     setIsCreateWorkoutOpen(false);
     setIsCustomBuilderOpen(true);
@@ -1085,6 +1075,9 @@ export default function App() {
     });
 
     if (added) {
+      if (planId === "custom") {
+        setPendingDeleteCustomProgramId(null);
+      }
       setNotice(`Добавлено: ${normalizedName}`);
       triggerImpact("light");
     } else {
@@ -1116,6 +1109,7 @@ export default function App() {
       return prev.filter((exercise) => exercise.name.toLowerCase() !== normalizedName.toLowerCase());
     });
 
+    setPendingDeleteCustomProgramId(null);
     setNotice(removed ? `Убрано: ${normalizedName}` : `Добавлено: ${normalizedName}`);
     triggerImpact("soft");
   }
@@ -1305,6 +1299,12 @@ export default function App() {
   }
 
   function clearCurrentPlan() {
+    if (selectedPlanId === "custom" && selectedCustomProgram && selectedCustomProgram.exercises.length > 0) {
+      setPendingDeleteCustomProgramId(selectedCustomProgram.id);
+    } else {
+      setPendingDeleteCustomProgramId(null);
+    }
+
     updateExercisesForPlan(selectedPlanId, () => []);
     setNotice("Тренировка очищена");
     triggerImpact("rigid");
@@ -1317,15 +1317,11 @@ export default function App() {
     setRestSeconds(null);
   }
 
-  function beginWorkoutEditing() {
-    setIsWorkoutEditing(true);
-    setNotice("Режим редактирования включен");
-  }
-
   function saveWorkoutSetup() {
     const shouldDeleteEmptyCustom =
       selectedPlanId === "custom" &&
       selectedCustomProgram !== null &&
+      pendingDeleteCustomProgramId === selectedCustomProgram.id &&
       selectedCustomProgram.exercises.length === 0;
 
     updateExercisesForPlan(selectedPlanId, (prev) =>
@@ -1337,14 +1333,14 @@ export default function App() {
       setSelectedCustomProgramId(null);
       setSelectedPlanId("upper");
       setScreen("home");
-      setIsWorkoutEditing(false);
+      setPendingDeleteCustomProgramId(null);
       closeWorkoutDrawers();
       setNotice("Пустая программа удалена");
       triggerImpact("medium");
       return;
     }
 
-    setIsWorkoutEditing(false);
+    setPendingDeleteCustomProgramId(null);
     closeWorkoutDrawers();
     setNotice("Программа сохранена");
     triggerImpact("medium");
@@ -1675,10 +1671,10 @@ export default function App() {
                     </button>
                   </div>
 
-                  {visibleCustomPrograms.length === 0 ? (
+                  {customPrograms.length === 0 ? (
                     <p className="empty-state">Добавь свою программу через +</p>
                   ) : (
-                    visibleCustomPrograms.map((program) => (
+                    customPrograms.map((program) => (
                       <button
                         key={program.id}
                         type="button"
@@ -1705,7 +1701,7 @@ export default function App() {
                 <p className="section-title">Мои тренировки</p>
               </div>
 
-              {plansWithWorkouts.length === 0 && visibleCustomPrograms.length === 0 ? (
+              {plansWithWorkouts.length === 0 && customPrograms.length === 0 ? (
                 <p className="empty-state">Пока пусто. Добавь первую тренировку через кнопку выше.</p>
               ) : (
                 <div className="saved-list">
@@ -1726,7 +1722,7 @@ export default function App() {
                     </article>
                   ))}
 
-                  {visibleCustomPrograms.map((program) => (
+                  {customPrograms.map((program) => (
                     <article key={program.id} className="saved-card">
                       <span className="saved-icon" aria-hidden="true">
                         <AppIcon name="custom" className="app-icon app-icon-sm" />
@@ -1805,75 +1801,62 @@ export default function App() {
             </section>
 
             <section className="quick-actions" aria-label="Быстрые действия">
+              {selectedPlanId === "custom" ? (
+                <button
+                  type="button"
+                  className={`action-btn ${isCustomBuilderOpen ? "is-active" : ""}`}
+                  onClick={() => setIsCustomBuilderOpen((prev) => !prev)}
+                >
+                  <span>База упражнений</span>
+                  <span className="action-hint action-hint-with-icon">
+                    <span>{isCustomBuilderOpen ? "Скрыть" : "Открыть"}</span>
+                    <span className={`action-toggle-icon ${isCustomBuilderOpen ? "is-open" : ""}`} aria-hidden="true">
+                      ▾
+                    </span>
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={`action-btn ${isExercisePickerOpen ? "is-active" : ""}`}
+                  onClick={() => setIsExercisePickerOpen((prev) => !prev)}
+                >
+                  <span>Добавить упражнение</span>
+                  <span className="action-hint action-hint-with-icon">
+                    <span>{isExercisePickerOpen ? "Скрыть" : "Открыть"}</span>
+                    <span className={`action-toggle-icon ${isExercisePickerOpen ? "is-open" : ""}`} aria-hidden="true">
+                      ▾
+                    </span>
+                  </span>
+                </button>
+              )}
+
               <button
                 type="button"
-                className={`action-btn action-btn-edit ${isWorkoutEditing ? "is-active" : ""}`}
-                onClick={() => (isWorkoutEditing ? saveWorkoutSetup() : beginWorkoutEditing())}
+                className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
+                onClick={() => setIsRestPanelOpen((prev) => !prev)}
               >
-                <span>{isWorkoutEditing ? "Сохранить" : "Редактировать"}</span>
-                <span className="action-hint">{isWorkoutEditing ? "Скрыть списки" : "Открыть инструменты"}</span>
+                <span>Отдых</span>
+                <span className="action-hint action-hint-with-icon">
+                  <span>{restSeconds !== null ? formatSeconds(restSeconds) : "мин/сек"}</span>
+                  <span className={`action-toggle-icon ${isRestPanelOpen ? "is-open" : ""}`} aria-hidden="true">
+                    ▾
+                  </span>
+                </span>
               </button>
 
-              {isWorkoutEditing ? (
-                <>
-                  {selectedPlanId === "custom" ? (
-                    <button
-                      type="button"
-                      className={`action-btn ${isCustomBuilderOpen ? "is-active" : ""}`}
-                      onClick={() => setIsCustomBuilderOpen((prev) => !prev)}
-                    >
-                      <span>База упражнений</span>
-                      <span className="action-hint action-hint-with-icon">
-                        <span>{isCustomBuilderOpen ? "Скрыть" : "Открыть"}</span>
-                        <span className={`action-toggle-icon ${isCustomBuilderOpen ? "is-open" : ""}`} aria-hidden="true">
-                          ▾
-                        </span>
-                      </span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`action-btn ${isExercisePickerOpen ? "is-active" : ""}`}
-                      onClick={() => setIsExercisePickerOpen((prev) => !prev)}
-                    >
-                      <span>Добавить упражнение</span>
-                      <span className="action-hint action-hint-with-icon">
-                        <span>{isExercisePickerOpen ? "Скрыть" : "Открыть"}</span>
-                        <span className={`action-toggle-icon ${isExercisePickerOpen ? "is-open" : ""}`} aria-hidden="true">
-                          ▾
-                        </span>
-                      </span>
-                    </button>
-                  )}
+              <button type="button" className="action-btn" onClick={clearCurrentPlan}>
+                <span>Очистить день</span>
+                <span className="action-hint">{activeExercises.length}</span>
+              </button>
 
-                  <button
-                    type="button"
-                    className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
-                    onClick={() => setIsRestPanelOpen((prev) => !prev)}
-                  >
-                    <span>Отдых</span>
-                    <span className="action-hint action-hint-with-icon">
-                      <span>{restSeconds !== null ? formatSeconds(restSeconds) : "мин/сек"}</span>
-                      <span className={`action-toggle-icon ${isRestPanelOpen ? "is-open" : ""}`} aria-hidden="true">
-                        ▾
-                      </span>
-                    </span>
-                  </button>
-
-                  <button type="button" className="action-btn" onClick={clearCurrentPlan}>
-                    <span>Очистить день</span>
-                    <span className="action-hint">{activeExercises.length}</span>
-                  </button>
-
-                  <button type="button" className="action-btn action-btn-save" onClick={saveWorkoutSetup}>
-                    <span>Сохранить</span>
-                    <span className="action-hint">Скрыть списки</span>
-                  </button>
-                </>
-              ) : null}
+              <button type="button" className="action-btn action-btn-save" onClick={saveWorkoutSetup}>
+                <span>Сохранить</span>
+                <span className="action-hint">Скрыть списки</span>
+              </button>
             </section>
 
-            {isWorkoutEditing && selectedPlanId !== "custom" && isExercisePickerOpen ? (
+            {selectedPlanId !== "custom" && isExercisePickerOpen ? (
               <section className="exercise-picker action-drawer" aria-label="Добавление упражнения">
                 <div className="drawer-head">
                   <label htmlFor="exercise-select">Упражнения для: {selectedPlan.title}</label>
@@ -1916,7 +1899,7 @@ export default function App() {
               </section>
             ) : null}
 
-            {isWorkoutEditing && selectedPlanId === "custom" && isCustomBuilderOpen ? (
+            {selectedPlanId === "custom" && isCustomBuilderOpen ? (
               <section className="custom-program-builder action-drawer" aria-label="Конструктор своей программы">
                 <div className="builder-head-row">
                   <div className="builder-head">
@@ -2075,7 +2058,7 @@ export default function App() {
               </section>
             ) : null}
 
-            {isWorkoutEditing && (isRestPanelOpen || restSeconds !== null) ? (
+            {isRestPanelOpen || restSeconds !== null ? (
               <section className="rest-drawer action-drawer" aria-label="Настройка отдыха">
                 <div className="rest-drawer-head">
                   <div>
@@ -2205,8 +2188,7 @@ export default function App() {
                               className="exercise-note-input"
                               type="text"
                               value={exercise.note}
-                              placeholder={isWorkoutEditing ? "Например: узкая постановка ног" : ""}
-                              readOnly={!isWorkoutEditing}
+                              placeholder="Например: узкая постановка ног"
                               onChange={(event) => updateExerciseNote(exercise.id, event.target.value)}
                             />
                           </label>
@@ -2229,7 +2211,6 @@ export default function App() {
                                   pattern="[0-9]*"
                                   placeholder="0"
                                   value={setItem.weight}
-                                  readOnly={!isWorkoutEditing}
                                   onChange={(event) => updateSetValue(exercise.id, setItem.id, "weight", event.target.value)}
                                 />
                                 <input
@@ -2238,7 +2219,6 @@ export default function App() {
                                   pattern="[0-9]*"
                                   placeholder="0"
                                   value={setItem.reps}
-                                  readOnly={!isWorkoutEditing}
                                   onChange={(event) => updateSetValue(exercise.id, setItem.id, "reps", event.target.value)}
                                 />
                                 {isCardioWorkout ? (
@@ -2248,33 +2228,19 @@ export default function App() {
                                     pattern="[0-9]*"
                                     placeholder="0"
                                     value={setItem.speed}
-                                    readOnly={!isWorkoutEditing}
                                     onChange={(event) =>
                                       updateSetValue(exercise.id, setItem.id, "speed", event.target.value)
                                     }
                                   />
                                 ) : (
-                                  <>
-                                    {isWorkoutEditing ? (
-                                      <button
-                                        type="button"
-                                        className="drop-toggle-btn"
-                                        onClick={() => addDropSet(exercise.id, setItem.id)}
-                                      >
-                                        дроп+
-                                      </button>
-                                    ) : (
-                                      <span className="set-static-cell">
-                                        {setItem.dropSets.length > 0 ? `D${setItem.dropSets.length}` : "-"}
-                                      </span>
-                                    )}
-                                  </>
+                                  <button type="button" className="drop-toggle-btn" onClick={() => addDropSet(exercise.id, setItem.id)}>
+                                    дроп+
+                                  </button>
                                 )}
                                 <button
                                   type="button"
                                   className="set-remove-btn"
                                   onClick={() => removeSet(exercise.id, setItem.id)}
-                                  disabled={!isWorkoutEditing}
                                 >
                                   ×
                                 </button>
@@ -2291,7 +2257,6 @@ export default function App() {
                                         pattern="[0-9]*"
                                         placeholder="0"
                                         value={dropSet.weight}
-                                        readOnly={!isWorkoutEditing}
                                         onChange={(event) =>
                                           updateDropSetValue(exercise.id, setItem.id, dropSet.id, "weight", event.target.value)
                                         }
@@ -2302,22 +2267,17 @@ export default function App() {
                                         pattern="[0-9]*"
                                         placeholder="0"
                                         value={dropSet.reps}
-                                        readOnly={!isWorkoutEditing}
                                         onChange={(event) =>
                                           updateDropSetValue(exercise.id, setItem.id, dropSet.id, "reps", event.target.value)
                                         }
                                       />
-                                      {isWorkoutEditing ? (
-                                        <button
-                                          type="button"
-                                          className="drop-remove-btn"
-                                          onClick={() => removeDropSet(exercise.id, setItem.id, dropSet.id)}
-                                        >
-                                          ×
-                                        </button>
-                                      ) : (
-                                        <span className="set-static-cell">-</span>
-                                      )}
+                                      <button
+                                        type="button"
+                                        className="drop-remove-btn"
+                                        onClick={() => removeDropSet(exercise.id, setItem.id, dropSet.id)}
+                                      >
+                                        ×
+                                      </button>
                                     </div>
                                   ))}
                                 </div>
@@ -2325,23 +2285,21 @@ export default function App() {
                             </div>
                           ))}
 
-                          {isWorkoutEditing ? (
-                            <div className="set-actions">
-                              <button type="button" className="add-set-btn" onClick={() => addSet(exercise.id)}>
-                                Добавить подход
-                              </button>
-                              <button
-                                type="button"
-                                className="add-set-btn add-set-btn-variant"
-                                onClick={() => duplicateExercise(exercise.id)}
-                              >
-                                Вариация
-                              </button>
-                              <button type="button" className="remove-ex-btn" onClick={() => removeExercise(exercise.id)}>
-                                Удалить упражнение
-                              </button>
-                            </div>
-                          ) : null}
+                          <div className="set-actions">
+                            <button type="button" className="add-set-btn" onClick={() => addSet(exercise.id)}>
+                              Добавить подход
+                            </button>
+                            <button
+                              type="button"
+                              className="add-set-btn add-set-btn-variant"
+                              onClick={() => duplicateExercise(exercise.id)}
+                            >
+                              Вариация
+                            </button>
+                            <button type="button" className="remove-ex-btn" onClick={() => removeExercise(exercise.id)}>
+                              Удалить упражнение
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                     </article>

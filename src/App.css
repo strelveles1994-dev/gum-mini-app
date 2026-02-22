@@ -611,10 +611,6 @@
   grid-column: span 2;
 }
 
-.action-btn-edit {
-  grid-column: span 2;
-}
-
 .action-drawer {
   animation: drawer-in 0.2s ease;
 }
@@ -1125,12 +1121,6 @@
   padding: 0 7px;
 }
 
-.set-input[readonly],
-.exercise-note-input[readonly] {
-  opacity: 0.86;
-  cursor: default;
-}
-
 .drop-toggle-btn,
 .set-remove-btn,
 .drop-remove-btn {
@@ -1150,24 +1140,6 @@
 .set-remove-btn,
 .drop-remove-btn {
   font-size: 1rem;
-}
-
-.set-remove-btn:disabled,
-.drop-remove-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.set-static-cell {
-  min-height: 42px;
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-sub);
-  font-size: 0.74rem;
-  font-weight: 800;
-  display: grid;
-  place-items: center;
 }
 
 .drop-board {
@@ -1569,10 +1541,6 @@ textarea:focus-visible {
   }
 
   .action-btn-save {
-    grid-column: auto;
-  }
-
-  .action-btn-edit {
     grid-column: auto;
   }
 
