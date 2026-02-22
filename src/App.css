@@ -261,9 +261,9 @@
   color: #ffffff;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
-  padding: 0 14px;
+  padding: 0 12px;
 }
 
 .theme-dark .primary-btn {
@@ -273,6 +273,21 @@
 
 .primary-btn.is-open {
   opacity: 0.88;
+}
+
+.primary-btn-label {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.primary-btn-chevron {
+  font-size: 0.9rem;
+  transition: transform 0.18s ease;
+}
+
+.primary-btn-chevron.is-open {
+  transform: rotate(180deg);
 }
 
 .plan-picker {
@@ -435,9 +450,9 @@
 }
 
 .mini-calendar {
-  padding: 8px 6px;
+  padding: 6px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .mini-calendar-head {
@@ -470,16 +485,16 @@
 }
 
 .calendar-day {
-  min-height: 50px;
+  min-height: 44px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 9px;
   background: transparent;
   color: var(--text-sub);
   display: grid;
   place-items: center;
   gap: 2px;
   cursor: pointer;
-  padding: 4px 0;
+  padding: 3px 0;
 }
 
 .calendar-day.is-today {
@@ -503,7 +518,7 @@
 }
 
 .calendar-number {
-  font-size: 0.95rem;
+  font-size: 0.86rem;
   font-weight: 800;
 }
 
@@ -534,7 +549,7 @@
 
 .quick-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -571,8 +586,33 @@
   color: var(--text-sub);
 }
 
+.action-hint-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-toggle-icon {
+  display: inline-block;
+  font-size: 0.82rem;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.action-toggle-icon.is-open {
+  transform: rotate(180deg);
+}
+
 .action-btn.is-active .action-hint {
   color: rgba(255, 255, 255, 0.78);
+}
+
+.action-btn-save {
+  grid-column: span 2;
+}
+
+.action-btn-edit {
+  grid-column: span 2;
 }
 
 .action-drawer {
@@ -597,6 +637,39 @@
   padding: 10px;
   display: grid;
   gap: 8px;
+}
+
+.drawer-head,
+.builder-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.drawer-toggle-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-sub);
+  display: grid;
+  place-items: center;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.18s ease;
+}
+
+.drawer-toggle-btn.is-open {
+  transform: rotate(180deg);
+}
+
+.drawer-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .exercise-picker label,
@@ -666,7 +739,7 @@
 
 .builder-filters {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
   gap: 6px;
 }
 
@@ -723,6 +796,26 @@
   font-size: 0.78rem;
   font-weight: 800;
   color: var(--text-sub);
+}
+
+.library-section-toggle {
+  width: 100%;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 4px 2px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.library-section-chevron {
+  margin-left: auto;
+  display: inline-block;
+  transition: transform 0.18s ease;
+}
+
+.library-section-chevron.is-open {
+  transform: rotate(180deg);
 }
 
 .library-section-icon {
@@ -943,6 +1036,24 @@
   gap: 7px;
 }
 
+.exercise-note-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-sub);
+}
+
+.exercise-note-input {
+  min-height: 36px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--text-main);
+  padding: 0 10px;
+  font-size: 0.84rem;
+}
+
 .exercise-insight {
   border: 1px solid var(--panel-border);
   border-radius: 11px;
@@ -1014,6 +1125,12 @@
   padding: 0 7px;
 }
 
+.set-input[readonly],
+.exercise-note-input[readonly] {
+  opacity: 0.86;
+  cursor: default;
+}
+
 .drop-toggle-btn,
 .set-remove-btn,
 .drop-remove-btn {
@@ -1033,6 +1150,24 @@
 .set-remove-btn,
 .drop-remove-btn {
   font-size: 1rem;
+}
+
+.set-remove-btn:disabled,
+.drop-remove-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.set-static-cell {
+  min-height: 42px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 0.74rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
 }
 
 .drop-board {
@@ -1065,6 +1200,7 @@
 
 .set-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1081,6 +1217,11 @@
   border: 0;
   background: var(--input-bg);
   color: var(--text-main);
+}
+
+.add-set-btn-variant {
+  flex: 0 0 auto;
+  padding: 0 12px;
 }
 
 .remove-ex-btn {
@@ -1425,6 +1566,14 @@ textarea:focus-visible {
 @media (max-width: 600px) {
   .quick-actions {
     grid-template-columns: 1fr;
+  }
+
+  .action-btn-save {
+    grid-column: auto;
+  }
+
+  .action-btn-edit {
+    grid-column: auto;
   }
 
   .builder-filters {

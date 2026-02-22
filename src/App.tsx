@@ -35,7 +35,7 @@ declare global {
 type DayPlanId = "upper" | "lower" | "fullbody" | "cardio" | "custom";
 type CustomLibraryFilter = "all" | BasePlanId;
 type AppScreen = "home" | "workout" | "progress";
-type IconName = DayPlanId | "home" | "progress" | "add";
+type IconName = DayPlanId | "home" | "progress" | "add" | "core";
 type MeasurementIconName = "date" | "height" | "weight" | "waist";
 
 type DayPlan = {
@@ -63,6 +63,7 @@ type WorkoutSet = {
 type SessionExercise = {
   id: string;
   name: string;
+  note: string;
   expanded: boolean;
   sets: WorkoutSet[];
 };
@@ -132,6 +133,7 @@ const customFilterOptions: { id: CustomLibraryFilter; label: string }[] = [
   { id: "all", label: "Все" },
   { id: "upper", label: "Верх" },
   { id: "lower", label: "Ноги" },
+  { id: "core", label: "Пресс/кор" },
   { id: "cardio", label: "Кардио" },
 ];
 
@@ -178,12 +180,14 @@ const dayPlans: DayPlan[] = [
 const customLibrarySections: { id: BasePlanId; title: string; icon: IconName }[] = [
   { id: "upper", title: "Верх тела", icon: "upper" },
   { id: "lower", title: "Ноги и ягодицы", icon: "lower" },
+  { id: "core", title: "Пресс и кор", icon: "core" },
   { id: "cardio", title: "Кардио", icon: "cardio" },
 ];
 
 const exerciseDefinitionsByPlan: Record<BasePlanId, ExerciseDefinition[]> = {
   upper: exerciseCatalogByPlan.upper,
   lower: exerciseCatalogByPlan.lower,
+  core: exerciseCatalogByPlan.core,
   cardio: exerciseCatalogByPlan.cardio,
 };
 
@@ -192,6 +196,7 @@ const fullBodyLibraryExercises = Array.from(
   new Set([
     ...baseExercisesByPlan.upper.slice(0, 10),
     ...baseExercisesByPlan.lower.slice(0, 10),
+    ...baseExercisesByPlan.core.slice(0, 6),
   ]),
 );
 
@@ -246,10 +251,11 @@ function createSet(weight = "", reps = "", dropSets?: DropSet[], speed = ""): Wo
   };
 }
 
-function createExercise(name: string, sets?: WorkoutSet[]): SessionExercise {
+function createExercise(name: string, sets?: WorkoutSet[], note = ""): SessionExercise {
   return {
     id: createId(),
     name,
+    note: note.slice(0, 140),
     expanded: false,
     sets: sets && sets.length > 0 ? sets : [createSet()],
   };
@@ -308,6 +314,7 @@ function normalizeExercises(input: unknown): SessionExercise[] {
       return {
         id: createId(),
         name: canonicalName,
+        note: typeof item.note === "string" ? item.note.slice(0, 140) : "",
         expanded: Boolean(item.expanded),
         sets: sets.length > 0 ? sets : [createSet()],
       };
@@ -597,6 +604,16 @@ function AppIcon({ name, className }: { name: IconName; className?: string }) {
     );
   }
 
+  if (name === "core") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <path d="M12 4.8C10.4 4.8 9.1 6.1 9.1 7.7V10.4H14.9V7.7C14.9 6.1 13.6 4.8 12 4.8Z" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M8.4 10.4H15.6V14.2H8.4V10.4Z" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M9 14.2H15V18.8H9V14.2Z" stroke="currentColor" strokeWidth="1.7" />
+      </svg>
+    );
+  }
+
   if (name === "cardio") {
     return (
       <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -687,6 +704,7 @@ export default function App() {
   const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
   const [isCustomBuilderOpen, setIsCustomBuilderOpen] = useState(false);
   const [isRestPanelOpen, setIsRestPanelOpen] = useState(false);
+  const [isWorkoutEditing, setIsWorkoutEditing] = useState(false);
   const [restMinutesInput, setRestMinutesInput] = useState(() => String(Math.floor(DEFAULT_REST_SECONDS / 60)));
   const [restSecondsInput, setRestSecondsInput] = useState(() => String(DEFAULT_REST_SECONDS % 60).padStart(2, "0"));
   const [restSeconds, setRestSeconds] = useState<number | null>(null);
@@ -698,6 +716,9 @@ export default function App() {
   const [monthAnchor] = useState(() => new Date());
   const [isMeasurementsExpanded, setIsMeasurementsExpanded] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey(new Date()));
+  const [expandedLibrarySections, setExpandedLibrarySections] = useState<BasePlanId[]>(() =>
+    customLibrarySections.map((section) => section.id),
+  );
   const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
     upper: exercisesByPlan.upper[0] ?? "",
     lower: exercisesByPlan.lower[0] ?? "",
@@ -936,20 +957,17 @@ export default function App() {
 
   function openWorkout(planId: DayPlanId, options?: { customProgramId?: string; logEvent?: boolean }) {
     setSelectedPlanId(planId);
+    setIsWorkoutEditing(false);
     if (planId === "custom") {
       const targetCustomId =
         options?.customProgramId ?? effectiveCustomProgramId ?? customPrograms[0]?.id ?? null;
       setSelectedCustomProgramId(targetCustomId);
       const targetProgram = customPrograms.find((program) => program.id === targetCustomId);
       setCustomWorkoutNameInput(targetProgram?.name ?? "");
-      setIsCustomBuilderOpen(true);
     }
     setScreen("workout");
     setIsCreateWorkoutOpen(false);
-    setIsExercisePickerOpen(false);
-    if (planId !== "custom") {
-      setIsCustomBuilderOpen(false);
-    }
+    closeWorkoutDrawers();
 
     if (options?.logEvent) {
       const dateKey = formatDateKey(new Date());
@@ -972,18 +990,16 @@ export default function App() {
 
   function goHome() {
     setScreen("home");
+    setIsWorkoutEditing(false);
     setIsCreateWorkoutOpen(false);
-    setIsExercisePickerOpen(false);
-    setIsCustomBuilderOpen(false);
-    setIsRestPanelOpen(false);
+    closeWorkoutDrawers();
   }
 
   function openProgress() {
     setScreen("progress");
+    setIsWorkoutEditing(false);
     setIsCreateWorkoutOpen(false);
-    setIsExercisePickerOpen(false);
-    setIsCustomBuilderOpen(false);
-    setIsRestPanelOpen(false);
+    closeWorkoutDrawers();
   }
 
   function createCustomProgram() {
@@ -1001,6 +1017,7 @@ export default function App() {
     setCustomWorkoutNameInput(program.name);
     setSelectedCustomProgramId(program.id);
     setSelectedPlanId("custom");
+    setIsWorkoutEditing(true);
     setScreen("workout");
     setIsCreateWorkoutOpen(false);
     setIsCustomBuilderOpen(true);
@@ -1027,11 +1044,15 @@ export default function App() {
       return;
     }
 
-    addExerciseToPlan("custom", name);
+    addExerciseToPlan("custom", name, { allowDuplicate: true });
     setCustomExerciseInput("");
   }
 
-  function addExerciseToPlan(planId: DayPlanId, exerciseName: string) {
+  function addExerciseToPlan(
+    planId: DayPlanId,
+    exerciseName: string,
+    options: { allowDuplicate?: boolean } = {},
+  ) {
     if (planId === "custom" && !effectiveCustomProgramId) {
       setNotice("Сначала создай свою программу");
       return;
@@ -1039,12 +1060,15 @@ export default function App() {
 
     const normalizedName = (getExerciseDefinition(exerciseName)?.name ?? exerciseName).trim();
     if (!normalizedName) return;
+    const allowDuplicate = Boolean(options.allowDuplicate);
 
     let added = false;
 
     updateExercisesForPlan(planId, (prev) => {
-      const alreadyExists = prev.some((exercise) => exercise.name.toLowerCase() === normalizedName.toLowerCase());
-      if (alreadyExists) return prev;
+      if (!allowDuplicate) {
+        const alreadyExists = prev.some((exercise) => exercise.name.toLowerCase() === normalizedName.toLowerCase());
+        if (alreadyExists) return prev;
+      }
 
       added = true;
       return [...prev, createExercise(normalizedName)];
@@ -1065,7 +1089,7 @@ export default function App() {
       return;
     }
 
-    addExerciseToPlan(selectedPlanId, exerciseName);
+    addExerciseToPlan(selectedPlanId, exerciseName, { allowDuplicate: true });
   }
 
   function toggleExerciseInCustomProgram(exerciseName: string) {
@@ -1085,12 +1109,57 @@ export default function App() {
     setNotice(removed ? `Убрано: ${normalizedName}` : `Добавлено: ${normalizedName}`);
     triggerImpact("soft");
   }
+
+  function toggleLibrarySection(sectionId: BasePlanId) {
+    setExpandedLibrarySections((prev) =>
+      prev.includes(sectionId) ? prev.filter((id) => id !== sectionId) : [...prev, sectionId],
+    );
+  }
+
   function toggleExercise(exerciseId: string) {
     updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) =>
         exercise.id === exerciseId ? { ...exercise, expanded: !exercise.expanded } : exercise,
       ),
     );
+  }
+
+  function updateExerciseNote(exerciseId: string, note: string) {
+    updateExercisesForPlan(selectedPlanId, (prev) =>
+      prev.map((exercise) =>
+        exercise.id === exerciseId ? { ...exercise, note: note.slice(0, 140) } : exercise,
+      ),
+    );
+  }
+
+  function duplicateExercise(exerciseId: string) {
+    let duplicated = false;
+
+    updateExercisesForPlan(selectedPlanId, (prev) => {
+      const index = prev.findIndex((exercise) => exercise.id === exerciseId);
+      if (index < 0) return prev;
+
+      const source = prev[index];
+      const copiedSets = source.sets.map((setItem) =>
+        createSet(
+          setItem.weight,
+          setItem.reps,
+          setItem.dropSets.map((dropSet) => createDropSet(dropSet.weight, dropSet.reps)),
+          setItem.speed,
+        ),
+      );
+
+      const copy = createExercise(source.name, copiedSets, source.note);
+      copy.expanded = true;
+      duplicated = true;
+
+      return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
+    });
+
+    if (duplicated) {
+      setNotice("Добавлена вариация упражнения");
+      triggerImpact("light");
+    }
   }
 
   function removeExercise(exerciseId: string) {
@@ -1229,6 +1298,28 @@ export default function App() {
     updateExercisesForPlan(selectedPlanId, () => []);
     setNotice("Тренировка очищена");
     triggerImpact("rigid");
+  }
+
+  function closeWorkoutDrawers() {
+    setIsExercisePickerOpen(false);
+    setIsCustomBuilderOpen(false);
+    setIsRestPanelOpen(false);
+    setRestSeconds(null);
+  }
+
+  function beginWorkoutEditing() {
+    setIsWorkoutEditing(true);
+    setNotice("Режим редактирования включен");
+  }
+
+  function saveWorkoutSetup() {
+    updateExercisesForPlan(selectedPlanId, (prev) =>
+      prev.map((exercise) => (exercise.expanded ? { ...exercise, expanded: false } : exercise)),
+    );
+    setIsWorkoutEditing(false);
+    closeWorkoutDrawers();
+    setNotice("Программа сохранена");
+    triggerImpact("medium");
   }
 
   function startRestTimer() {
@@ -1517,7 +1608,10 @@ export default function App() {
                 onClick={() => setIsCreateWorkoutOpen((prev) => !prev)}
               >
                 <AppIcon name="add" className="app-icon app-icon-sm" />
-                <span>{isCreateWorkoutOpen ? "Скрыть список" : "Добавить тренировку"}</span>
+                <span className="primary-btn-label">{isCreateWorkoutOpen ? "Скрыть список" : "Добавить тренировку"}</span>
+                <span className={`primary-btn-chevron ${isCreateWorkoutOpen ? "is-open" : ""}`} aria-hidden="true">
+                  ▾
+                </span>
               </button>
 
               {isCreateWorkoutOpen ? (
@@ -1683,44 +1777,87 @@ export default function App() {
             </section>
 
             <section className="quick-actions" aria-label="Быстрые действия">
-              {selectedPlanId === "custom" ? (
-                <button
-                  type="button"
-                  className={`action-btn ${isCustomBuilderOpen ? "is-active" : ""}`}
-                  onClick={() => setIsCustomBuilderOpen((prev) => !prev)}
-                >
-                  <span>База упражнений</span>
-                  <span className="action-hint">{isCustomBuilderOpen ? "Скрыть" : "Открыть"}</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={`action-btn ${isExercisePickerOpen ? "is-active" : ""}`}
-                  onClick={() => setIsExercisePickerOpen((prev) => !prev)}
-                >
-                  <span>Добавить упражнение</span>
-                  <span className="action-hint">{isExercisePickerOpen ? "Скрыть" : "Открыть"}</span>
-                </button>
-              )}
-
               <button
                 type="button"
-                className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
-                onClick={() => setIsRestPanelOpen((prev) => !prev)}
+                className={`action-btn action-btn-edit ${isWorkoutEditing ? "is-active" : ""}`}
+                onClick={() => (isWorkoutEditing ? saveWorkoutSetup() : beginWorkoutEditing())}
               >
-                <span>Отдых</span>
-                <span className="action-hint">{restSeconds !== null ? formatSeconds(restSeconds) : "мин/сек"}</span>
+                <span>{isWorkoutEditing ? "Сохранить" : "Редактировать"}</span>
+                <span className="action-hint">{isWorkoutEditing ? "Скрыть списки" : "Открыть инструменты"}</span>
               </button>
 
-              <button type="button" className="action-btn" onClick={clearCurrentPlan}>
-                <span>Очистить день</span>
-                <span className="action-hint">{activeExercises.length}</span>
-              </button>
+              {isWorkoutEditing ? (
+                <>
+                  {selectedPlanId === "custom" ? (
+                    <button
+                      type="button"
+                      className={`action-btn ${isCustomBuilderOpen ? "is-active" : ""}`}
+                      onClick={() => setIsCustomBuilderOpen((prev) => !prev)}
+                    >
+                      <span>База упражнений</span>
+                      <span className="action-hint action-hint-with-icon">
+                        <span>{isCustomBuilderOpen ? "Скрыть" : "Открыть"}</span>
+                        <span className={`action-toggle-icon ${isCustomBuilderOpen ? "is-open" : ""}`} aria-hidden="true">
+                          ▾
+                        </span>
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`action-btn ${isExercisePickerOpen ? "is-active" : ""}`}
+                      onClick={() => setIsExercisePickerOpen((prev) => !prev)}
+                    >
+                      <span>Добавить упражнение</span>
+                      <span className="action-hint action-hint-with-icon">
+                        <span>{isExercisePickerOpen ? "Скрыть" : "Открыть"}</span>
+                        <span className={`action-toggle-icon ${isExercisePickerOpen ? "is-open" : ""}`} aria-hidden="true">
+                          ▾
+                        </span>
+                      </span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className={`action-btn ${isRestPanelOpen || restSeconds !== null ? "is-active" : ""}`}
+                    onClick={() => setIsRestPanelOpen((prev) => !prev)}
+                  >
+                    <span>Отдых</span>
+                    <span className="action-hint action-hint-with-icon">
+                      <span>{restSeconds !== null ? formatSeconds(restSeconds) : "мин/сек"}</span>
+                      <span className={`action-toggle-icon ${isRestPanelOpen ? "is-open" : ""}`} aria-hidden="true">
+                        ▾
+                      </span>
+                    </span>
+                  </button>
+
+                  <button type="button" className="action-btn" onClick={clearCurrentPlan}>
+                    <span>Очистить день</span>
+                    <span className="action-hint">{activeExercises.length}</span>
+                  </button>
+
+                  <button type="button" className="action-btn action-btn-save" onClick={saveWorkoutSetup}>
+                    <span>Сохранить</span>
+                    <span className="action-hint">Скрыть списки</span>
+                  </button>
+                </>
+              ) : null}
             </section>
 
-            {selectedPlanId !== "custom" && isExercisePickerOpen ? (
+            {isWorkoutEditing && selectedPlanId !== "custom" && isExercisePickerOpen ? (
               <section className="exercise-picker action-drawer" aria-label="Добавление упражнения">
-                <label htmlFor="exercise-select">Упражнения для: {selectedPlan.title}</label>
+                <div className="drawer-head">
+                  <label htmlFor="exercise-select">Упражнения для: {selectedPlan.title}</label>
+                  <button
+                    type="button"
+                    className="drawer-toggle-btn is-open"
+                    onClick={() => setIsExercisePickerOpen(false)}
+                    aria-label="Скрыть список упражнений"
+                  >
+                    ▾
+                  </button>
+                </div>
                 <div className="picker-row">
                   <select
                     id="exercise-select"
@@ -1743,14 +1880,29 @@ export default function App() {
                     Добавить
                   </button>
                 </div>
+                <div className="drawer-actions">
+                  <button type="button" className="secondary-btn" onClick={saveWorkoutSetup}>
+                    Сохранить
+                  </button>
+                </div>
               </section>
             ) : null}
 
-            {selectedPlanId === "custom" && isCustomBuilderOpen ? (
+            {isWorkoutEditing && selectedPlanId === "custom" && isCustomBuilderOpen ? (
               <section className="custom-program-builder action-drawer" aria-label="Конструктор своей программы">
-                <div className="builder-head">
-                  <p className="builder-title">База упражнений</p>
-                  <p className="builder-subtitle">Название и упражнения для своей программы</p>
+                <div className="builder-head-row">
+                  <div className="builder-head">
+                    <p className="builder-title">База упражнений</p>
+                    <p className="builder-subtitle">Название и упражнения для своей программы</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="drawer-toggle-btn is-open"
+                    onClick={() => setIsCustomBuilderOpen(false)}
+                    aria-label="Скрыть конструктор"
+                  >
+                    ▾
+                  </button>
                 </div>
 
                 {!selectedCustomProgram ? (
@@ -1830,91 +1982,131 @@ export default function App() {
                   ) : (
                     filteredCustomSections.map((section) => (
                       <div key={section.id} className="library-section">
-                        <p className="library-section-title">
+                        <button
+                          type="button"
+                          className="library-section-title library-section-toggle"
+                          onClick={() => toggleLibrarySection(section.id)}
+                          aria-expanded={expandedLibrarySections.includes(section.id)}
+                        >
                           <span className="library-section-icon" aria-hidden="true">
                             <AppIcon name={section.icon} className="app-icon app-icon-xs" />
                           </span>
                           <span>{section.title}</span>
-                        </p>
+                          <span
+                            className={`library-section-chevron ${
+                              expandedLibrarySections.includes(section.id) ? "is-open" : ""
+                            }`}
+                            aria-hidden="true"
+                          >
+                            ▾
+                          </span>
+                        </button>
 
-                        <div className="library-items">
-                          {section.exercises.map((exerciseDef) => {
-                            const exerciseName = exerciseDef.name;
-                            const isAdded = customExerciseNameSet.has(exerciseName.toLowerCase());
+                        {expandedLibrarySections.includes(section.id) ? (
+                          <div className="library-items">
+                            {section.exercises.map((exerciseDef) => {
+                              const exerciseName = exerciseDef.name;
+                              const isAdded = customExerciseNameSet.has(exerciseName.toLowerCase());
 
-                            return (
-                              <button
-                                key={exerciseName}
-                                type="button"
-                                className={`library-item ${isAdded ? "is-added" : ""}`}
-                                onClick={() => toggleExerciseInCustomProgram(exerciseName)}
-                                disabled={!selectedCustomProgram}
-                              >
-                                <span className="library-item-main">
-                                  <img src={exerciseDef.image} alt={exerciseName} className="library-item-thumb" loading="lazy" />
-                                  <span className="library-item-copy">
-                                    <span className="library-item-name">{exerciseName}</span>
-                                    <span className="library-item-muscles">{formatMuscleList(exerciseDef.primaryMuscles, 2)}</span>
+                              return (
+                                <button
+                                  key={exerciseName}
+                                  type="button"
+                                  className={`library-item ${isAdded ? "is-added" : ""}`}
+                                  onClick={() => toggleExerciseInCustomProgram(exerciseName)}
+                                  disabled={!selectedCustomProgram}
+                                >
+                                  <span className="library-item-main">
+                                    <img
+                                      src={exerciseDef.image}
+                                      alt={exerciseName}
+                                      className="library-item-thumb"
+                                      loading="lazy"
+                                    />
+                                    <span className="library-item-copy">
+                                      <span className="library-item-name">{exerciseName}</span>
+                                      <span className="library-item-muscles">{formatMuscleList(exerciseDef.primaryMuscles, 2)}</span>
+                                    </span>
                                   </span>
-                                </span>
-                                <span className="library-item-action">{isAdded ? "Убрать" : "Добавить"}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                                  <span className="library-item-action">{isAdded ? "Убрать" : "Добавить"}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   )}
                 </div>
+
+                <div className="drawer-actions">
+                  <button type="button" className="secondary-btn" onClick={saveWorkoutSetup}>
+                    Сохранить программу
+                  </button>
+                </div>
               </section>
             ) : null}
 
-            {isRestPanelOpen || restSeconds !== null ? (
+            {isWorkoutEditing && (isRestPanelOpen || restSeconds !== null) ? (
               <section className="rest-drawer action-drawer" aria-label="Настройка отдыха">
                 <div className="rest-drawer-head">
-                  <p className="rest-label">Отдых</p>
-                  <p className="rest-value">{restSeconds !== null ? formatSeconds(restSeconds) : "Не запущен"}</p>
-                </div>
-
-                <div className="rest-input-grid">
-                  <label>
-                    Мин
-                    <input
-                      className="rest-time-input"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      placeholder="0"
-                      value={restMinutesInput}
-                      onChange={(event) => setRestMinutesInput(sanitizeNumber(event.target.value, 2))}
-                    />
-                  </label>
-                  <label>
-                    Сек
-                    <input
-                      className="rest-time-input"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      placeholder="00"
-                      value={restSecondsInput}
-                      onChange={(event) => setRestSecondsInput(sanitizeNumber(event.target.value, 2))}
-                    />
-                  </label>
-                </div>
-
-                <div className="rest-actions">
-                  <button type="button" className="rest-btn" onClick={startRestTimer}>
-                    Запустить
+                  <div>
+                    <p className="rest-label">Отдых</p>
+                    <p className="rest-value">{restSeconds !== null ? formatSeconds(restSeconds) : "Не запущен"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`drawer-toggle-btn ${isRestPanelOpen ? "is-open" : ""}`}
+                    onClick={() => setIsRestPanelOpen((prev) => !prev)}
+                    aria-label={isRestPanelOpen ? "Скрыть панель отдыха" : "Показать панель отдыха"}
+                  >
+                    ▾
                   </button>
-                  {restSeconds !== null ? (
-                    <button type="button" className="rest-btn is-ghost" onClick={stopRestTimer}>
-                      Остановить
-                    </button>
-                  ) : (
-                    <button type="button" className="rest-btn is-ghost" onClick={() => setIsRestPanelOpen(false)}>
-                      Скрыть
-                    </button>
-                  )}
                 </div>
+
+                {isRestPanelOpen ? (
+                  <>
+                    <div className="rest-input-grid">
+                      <label>
+                        Мин
+                        <input
+                          className="rest-time-input"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="0"
+                          value={restMinutesInput}
+                          onChange={(event) => setRestMinutesInput(sanitizeNumber(event.target.value, 2))}
+                        />
+                      </label>
+                      <label>
+                        Сек
+                        <input
+                          className="rest-time-input"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="00"
+                          value={restSecondsInput}
+                          onChange={(event) => setRestSecondsInput(sanitizeNumber(event.target.value, 2))}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="rest-actions">
+                      <button type="button" className="rest-btn" onClick={startRestTimer}>
+                        Запустить
+                      </button>
+                      {restSeconds !== null ? (
+                        <button type="button" className="rest-btn is-ghost" onClick={stopRestTimer}>
+                          Остановить
+                        </button>
+                      ) : (
+                        <button type="button" className="rest-btn is-ghost" onClick={() => setIsRestPanelOpen(false)}>
+                          Скрыть
+                        </button>
+                      )}
+                    </div>
+                  </>
+                ) : null}
               </section>
             ) : null}
 
@@ -1950,7 +2142,10 @@ export default function App() {
                         </span>
                         <span className="exercise-text">
                           <strong>{exercise.name}</strong>
-                          <small>{exercise.sets.length} подходов</small>
+                          <small>
+                            {exercise.sets.length} подходов
+                            {exercise.note ? ` · ${exercise.note.slice(0, 44)}` : ""}
+                          </small>
                         </span>
                         {!isCardioWorkout && prWeight > 0 ? <span className="exercise-pr">PR {prWeight} кг</span> : null}
                         <span className="exercise-chevron" aria-hidden="true">
@@ -1976,6 +2171,18 @@ export default function App() {
                             </div>
                           ) : null}
 
+                          <label className="exercise-note-field">
+                            <span>Примечание</span>
+                            <input
+                              className="exercise-note-input"
+                              type="text"
+                              value={exercise.note}
+                              placeholder={isWorkoutEditing ? "Например: узкая постановка ног" : ""}
+                              readOnly={!isWorkoutEditing}
+                              onChange={(event) => updateExerciseNote(exercise.id, event.target.value)}
+                            />
+                          </label>
+
                           <div className="set-head">
                             <span>№</span>
                             <span>{isCardioWorkout ? "мин" : "вес"}</span>
@@ -1994,6 +2201,7 @@ export default function App() {
                                   pattern="[0-9]*"
                                   placeholder="0"
                                   value={setItem.weight}
+                                  readOnly={!isWorkoutEditing}
                                   onChange={(event) => updateSetValue(exercise.id, setItem.id, "weight", event.target.value)}
                                 />
                                 <input
@@ -2002,6 +2210,7 @@ export default function App() {
                                   pattern="[0-9]*"
                                   placeholder="0"
                                   value={setItem.reps}
+                                  readOnly={!isWorkoutEditing}
                                   onChange={(event) => updateSetValue(exercise.id, setItem.id, "reps", event.target.value)}
                                 />
                                 {isCardioWorkout ? (
@@ -2011,16 +2220,34 @@ export default function App() {
                                     pattern="[0-9]*"
                                     placeholder="0"
                                     value={setItem.speed}
+                                    readOnly={!isWorkoutEditing}
                                     onChange={(event) =>
                                       updateSetValue(exercise.id, setItem.id, "speed", event.target.value)
                                     }
                                   />
                                 ) : (
-                                  <button type="button" className="drop-toggle-btn" onClick={() => addDropSet(exercise.id, setItem.id)}>
-                                    дроп+
-                                  </button>
+                                  <>
+                                    {isWorkoutEditing ? (
+                                      <button
+                                        type="button"
+                                        className="drop-toggle-btn"
+                                        onClick={() => addDropSet(exercise.id, setItem.id)}
+                                      >
+                                        дроп+
+                                      </button>
+                                    ) : (
+                                      <span className="set-static-cell">
+                                        {setItem.dropSets.length > 0 ? `D${setItem.dropSets.length}` : "-"}
+                                      </span>
+                                    )}
+                                  </>
                                 )}
-                                <button type="button" className="set-remove-btn" onClick={() => removeSet(exercise.id, setItem.id)}>
+                                <button
+                                  type="button"
+                                  className="set-remove-btn"
+                                  onClick={() => removeSet(exercise.id, setItem.id)}
+                                  disabled={!isWorkoutEditing}
+                                >
                                   ×
                                 </button>
                               </div>
@@ -2036,6 +2263,7 @@ export default function App() {
                                         pattern="[0-9]*"
                                         placeholder="0"
                                         value={dropSet.weight}
+                                        readOnly={!isWorkoutEditing}
                                         onChange={(event) =>
                                           updateDropSetValue(exercise.id, setItem.id, dropSet.id, "weight", event.target.value)
                                         }
@@ -2046,17 +2274,22 @@ export default function App() {
                                         pattern="[0-9]*"
                                         placeholder="0"
                                         value={dropSet.reps}
+                                        readOnly={!isWorkoutEditing}
                                         onChange={(event) =>
                                           updateDropSetValue(exercise.id, setItem.id, dropSet.id, "reps", event.target.value)
                                         }
                                       />
-                                      <button
-                                        type="button"
-                                        className="drop-remove-btn"
-                                        onClick={() => removeDropSet(exercise.id, setItem.id, dropSet.id)}
-                                      >
-                                        ×
-                                      </button>
+                                      {isWorkoutEditing ? (
+                                        <button
+                                          type="button"
+                                          className="drop-remove-btn"
+                                          onClick={() => removeDropSet(exercise.id, setItem.id, dropSet.id)}
+                                        >
+                                          ×
+                                        </button>
+                                      ) : (
+                                        <span className="set-static-cell">-</span>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
@@ -2064,14 +2297,23 @@ export default function App() {
                             </div>
                           ))}
 
-                          <div className="set-actions">
-                            <button type="button" className="add-set-btn" onClick={() => addSet(exercise.id)}>
-                              Добавить подход
-                            </button>
-                            <button type="button" className="remove-ex-btn" onClick={() => removeExercise(exercise.id)}>
-                              Удалить упражнение
-                            </button>
-                          </div>
+                          {isWorkoutEditing ? (
+                            <div className="set-actions">
+                              <button type="button" className="add-set-btn" onClick={() => addSet(exercise.id)}>
+                                Добавить подход
+                              </button>
+                              <button
+                                type="button"
+                                className="add-set-btn add-set-btn-variant"
+                                onClick={() => duplicateExercise(exercise.id)}
+                              >
+                                Вариация
+                              </button>
+                              <button type="button" className="remove-ex-btn" onClick={() => removeExercise(exercise.id)}>
+                                Удалить упражнение
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </article>
