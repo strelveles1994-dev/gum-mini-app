@@ -180,9 +180,9 @@
 }
 
 .home-calendar {
-  padding: 10px;
+  padding: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .home-calendar-head {
@@ -194,7 +194,7 @@
 
 .home-calendar-month {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--text-sub);
   text-transform: capitalize;
 }
@@ -203,24 +203,24 @@
 .home-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
+  gap: 3px;
 }
 
 .home-calendar-week span {
   text-align: center;
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   font-weight: 700;
   color: var(--text-sub);
 }
 
 .home-calendar-day {
-  min-height: 34px;
-  border-radius: 9px;
+  min-height: 26px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
   background: var(--input-bg);
   color: var(--text-main);
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 700;
   position: relative;
 }
@@ -238,12 +238,12 @@
 }
 
 .home-calendar-day.has-workout i {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: var(--accent);
   position: absolute;
-  bottom: 4px;
+  bottom: 3px;
 }
 
 .primary-btn,
@@ -422,12 +422,12 @@
 
 .custom-swipe-delete-btn {
   position: absolute;
-  left: 0;
+  right: 0;
   top: 0;
   bottom: 0;
   width: 92px;
   border: 0;
-  border-radius: 12px 0 0 12px;
+  border-radius: 0 12px 12px 0;
   background: linear-gradient(130deg, #d4435a, #b31f3a);
   color: #ffffff;
   font-size: 0.78rem;
@@ -444,7 +444,7 @@
 }
 
 .custom-swipe-row.is-open .custom-swipe-card {
-  transform: translateX(92px);
+  transform: translateX(-92px);
 }
 
 .saved-icon {

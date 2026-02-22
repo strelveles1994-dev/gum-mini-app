@@ -1342,12 +1342,12 @@ export default function App() {
     if (!swipe || swipe.programId !== programId) return;
 
     const delta = clientX - swipe.x;
-    if (delta >= 56) {
+    if (delta <= -56) {
       setSwipedCustomProgramId(programId);
       return;
     }
 
-    if (delta <= -24 && swipedCustomProgramId === programId) {
+    if (delta >= 24 && swipedCustomProgramId === programId) {
       setSwipedCustomProgramId(null);
     }
   }
