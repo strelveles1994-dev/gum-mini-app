@@ -747,6 +747,7 @@ export default function App() {
   const activeExercises =
     selectedPlanId === "custom" ? selectedCustomProgram?.exercises ?? [] : sessionByPlan[selectedPlanId];
   const isCardioWorkout = selectedPlanId === "cardio";
+  const expandedExerciseId = activeExercises.find((exercise) => exercise.expanded)?.id ?? null;
 
   const allExercisesForProgress = useMemo(
     () => [
@@ -1128,9 +1129,14 @@ export default function App() {
 
   function toggleExercise(exerciseId: string) {
     updateExercisesForPlan(selectedPlanId, (prev) =>
-      prev.map((exercise) =>
-        exercise.id === exerciseId ? { ...exercise, expanded: !exercise.expanded } : exercise,
-      ),
+      prev.map((exercise) => {
+        if (exercise.id === exerciseId) {
+          return { ...exercise, expanded: !exercise.expanded };
+        }
+
+        if (!exercise.expanded) return exercise;
+        return { ...exercise, expanded: false };
+      }),
     );
   }
 
@@ -2190,7 +2196,10 @@ export default function App() {
 
             {notice ? <p className="inline-notice">{notice}</p> : null}
 
-            <section className="exercise-board" aria-label="Список упражнений">
+            <section
+              className={`exercise-board ${expandedExerciseId ? "has-focus" : ""}`}
+              aria-label="Список упражнений"
+            >
               {activeExercises.length === 0 ? (
                 <p className="exercise-empty">
                   {selectedPlanId === "custom"
@@ -2208,7 +2217,12 @@ export default function App() {
                   const prWeight = personalRecords.get(exercise.name) ?? 0;
 
                   return (
-                    <article key={exercise.id} className={`exercise-card ${exercise.expanded ? "expanded" : ""}`}>
+                    <article
+                      key={exercise.id}
+                      className={`exercise-card ${exercise.expanded ? "expanded is-focused" : ""} ${
+                        expandedExerciseId && !exercise.expanded ? "is-dimmed" : ""
+                      }`}
+                    >
                       <button
                         type="button"
                         className="exercise-head"

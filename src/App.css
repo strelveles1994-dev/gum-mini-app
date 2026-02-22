@@ -994,10 +994,31 @@
 
 .exercise-card {
   border-bottom: 1px solid var(--panel-border);
+  transition: opacity 0.18s ease, filter 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .exercise-card:last-child {
   border-bottom: 0;
+}
+
+.exercise-board.has-focus .exercise-card.is-dimmed {
+  opacity: 0.34;
+  filter: blur(1.6px) saturate(0.85);
+  transform: scale(0.988);
+}
+
+.exercise-card.is-focused {
+  position: relative;
+  z-index: 2;
+  border-radius: 12px;
+  background: var(--panel-elevated);
+  border: 1px solid var(--panel-border);
+  margin: 6px;
+  box-shadow: 0 10px 24px rgba(26, 35, 56, 0.12);
+}
+
+.theme-dark .exercise-card.is-focused {
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
 }
 
 .exercise-head {
