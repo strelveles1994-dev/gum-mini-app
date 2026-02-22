@@ -1142,36 +1142,6 @@ export default function App() {
     );
   }
 
-  function duplicateExercise(exerciseId: string) {
-    let duplicated = false;
-
-    updateExercisesForPlan(selectedPlanId, (prev) => {
-      const index = prev.findIndex((exercise) => exercise.id === exerciseId);
-      if (index < 0) return prev;
-
-      const source = prev[index];
-      const copiedSets = source.sets.map((setItem) =>
-        createSet(
-          setItem.weight,
-          setItem.reps,
-          setItem.dropSets.map((dropSet) => createDropSet(dropSet.weight, dropSet.reps)),
-          setItem.speed,
-        ),
-      );
-
-      const copy = createExercise(source.name, copiedSets, source.note);
-      copy.expanded = true;
-      duplicated = true;
-
-      return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
-    });
-
-    if (duplicated) {
-      setNotice("Добавлена вариация упражнения");
-      triggerImpact("light");
-    }
-  }
-
   function removeExercise(exerciseId: string) {
     updateExercisesForPlan(selectedPlanId, (prev) => prev.filter((exercise) => exercise.id !== exerciseId));
     setNotice("Упражнение удалено");
@@ -2383,10 +2353,10 @@ export default function App() {
                             </button>
                             <button
                               type="button"
-                              className="add-set-btn add-set-btn-variant"
-                              onClick={() => duplicateExercise(exercise.id)}
+                              className="add-set-btn"
+                              onClick={saveWorkoutSetup}
                             >
-                              Вариация
+                              Сохранить
                             </button>
                             <button type="button" className="remove-ex-btn" onClick={() => removeExercise(exercise.id)}>
                               Удалить упражнение

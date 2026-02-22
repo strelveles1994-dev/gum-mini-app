@@ -1224,11 +1224,6 @@
   color: var(--text-main);
 }
 
-.add-set-btn-variant {
-  flex: 0 0 auto;
-  padding: 0 12px;
-}
-
 .remove-ex-btn {
   border: 1px solid var(--panel-border);
   background: transparent;
