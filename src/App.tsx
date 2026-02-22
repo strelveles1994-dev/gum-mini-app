@@ -727,7 +727,13 @@ export default function App() {
     custom: exercisesByPlan.custom[0] ?? "",
   });
 
-  const effectiveCustomProgramId = selectedCustomProgramId ?? customPrograms[0]?.id ?? null;
+  const visibleCustomPrograms = useMemo(
+    () => customPrograms.filter((program) => program.exercises.length > 0),
+    [customPrograms],
+  );
+
+  const effectiveCustomProgramId =
+    selectedCustomProgramId ?? visibleCustomPrograms[0]?.id ?? customPrograms[0]?.id ?? null;
   const selectedCustomProgram =
     effectiveCustomProgramId !== null
       ? customPrograms.find((program) => program.id === effectiveCustomProgramId) ?? null
@@ -960,7 +966,11 @@ export default function App() {
     setIsWorkoutEditing(false);
     if (planId === "custom") {
       const targetCustomId =
-        options?.customProgramId ?? effectiveCustomProgramId ?? customPrograms[0]?.id ?? null;
+        options?.customProgramId ??
+        effectiveCustomProgramId ??
+        visibleCustomPrograms[0]?.id ??
+        customPrograms[0]?.id ??
+        null;
       setSelectedCustomProgramId(targetCustomId);
       const targetProgram = customPrograms.find((program) => program.id === targetCustomId);
       setCustomWorkoutNameInput(targetProgram?.name ?? "");
@@ -1313,9 +1323,27 @@ export default function App() {
   }
 
   function saveWorkoutSetup() {
+    const shouldDeleteEmptyCustom =
+      selectedPlanId === "custom" &&
+      selectedCustomProgram !== null &&
+      selectedCustomProgram.exercises.length === 0;
+
     updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) => (exercise.expanded ? { ...exercise, expanded: false } : exercise)),
     );
+
+    if (shouldDeleteEmptyCustom && selectedCustomProgram) {
+      setCustomPrograms((prev) => prev.filter((program) => program.id !== selectedCustomProgram.id));
+      setSelectedCustomProgramId(null);
+      setSelectedPlanId("upper");
+      setScreen("home");
+      setIsWorkoutEditing(false);
+      closeWorkoutDrawers();
+      setNotice("Пустая программа удалена");
+      triggerImpact("medium");
+      return;
+    }
+
     setIsWorkoutEditing(false);
     closeWorkoutDrawers();
     setNotice("Программа сохранена");
@@ -1647,10 +1675,10 @@ export default function App() {
                     </button>
                   </div>
 
-                  {customPrograms.length === 0 ? (
+                  {visibleCustomPrograms.length === 0 ? (
                     <p className="empty-state">Добавь свою программу через +</p>
                   ) : (
-                    customPrograms.map((program) => (
+                    visibleCustomPrograms.map((program) => (
                       <button
                         key={program.id}
                         type="button"
@@ -1677,7 +1705,7 @@ export default function App() {
                 <p className="section-title">Мои тренировки</p>
               </div>
 
-              {plansWithWorkouts.length === 0 && customPrograms.length === 0 ? (
+              {plansWithWorkouts.length === 0 && visibleCustomPrograms.length === 0 ? (
                 <p className="empty-state">Пока пусто. Добавь первую тренировку через кнопку выше.</p>
               ) : (
                 <div className="saved-list">
@@ -1698,7 +1726,7 @@ export default function App() {
                     </article>
                   ))}
 
-                  {customPrograms.map((program) => (
+                  {visibleCustomPrograms.map((program) => (
                     <article key={program.id} className="saved-card">
                       <span className="saved-icon" aria-hidden="true">
                         <AppIcon name="custom" className="app-icon app-icon-sm" />
