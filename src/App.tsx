@@ -32,11 +32,11 @@ declare global {
   }
 }
 
-type DayPlanId = "upper" | "lower" | "cardio" | "custom";
+type DayPlanId = "upper" | "lower" | "fullbody" | "cardio" | "custom";
 type CustomLibraryFilter = "all" | BasePlanId;
-type AppScreen = "home" | "workout" | "profile";
-type IconName = DayPlanId | "home" | "profile" | "add";
-type MeasurementIconName = "date" | "height" | "weight" | "chest" | "waist" | "glutes" | "thighs" | "belly";
+type AppScreen = "home" | "workout" | "progress";
+type IconName = DayPlanId | "home" | "progress" | "add";
+type MeasurementIconName = "date" | "height" | "weight" | "waist";
 
 type DayPlan = {
   id: DayPlanId;
@@ -56,6 +56,7 @@ type WorkoutSet = {
   id: string;
   weight: string;
   reps: string;
+  speed: string;
   dropSets: DropSet[];
 };
 
@@ -68,7 +69,7 @@ type SessionExercise = {
 
 type SessionByPlan = Record<DayPlanId, SessionExercise[]>;
 type SelectedExerciseByPlan = Record<DayPlanId, string>;
-type SetField = "weight" | "reps";
+type SetField = "weight" | "reps" | "speed";
 type DropSetField = "weight" | "reps";
 
 type CalendarDay = {
@@ -76,6 +77,13 @@ type CalendarDay = {
   weekday: string;
   dayNumber: string;
   fullLabel: string;
+  isToday: boolean;
+};
+
+type MonthCalendarDay = {
+  key: string;
+  dayNumber: number;
+  inCurrentMonth: boolean;
   isToday: boolean;
 };
 
@@ -102,8 +110,22 @@ type ProfileState = {
   measurements: MeasurementEntry[];
 };
 
+type CustomProgram = {
+  id: string;
+  name: string;
+  exercises: SessionExercise[];
+};
+
+type WorkoutLog = {
+  id: string;
+  dateKey: string;
+  title: string;
+};
+
 const STORAGE_KEY = "gym-check-session-v7";
 const PROFILE_STORAGE_KEY = "gym-check-profile-v3";
+const CUSTOM_PROGRAMS_KEY = "gym-check-custom-programs-v1";
+const WORKOUT_LOGS_KEY = "gym-check-workout-logs-v1";
 const DEFAULT_REST_SECONDS = 90;
 
 const customFilterOptions: { id: CustomLibraryFilter; label: string }[] = [
@@ -112,6 +134,8 @@ const customFilterOptions: { id: CustomLibraryFilter; label: string }[] = [
   { id: "lower", label: "Ноги" },
   { id: "cardio", label: "Кардио" },
 ];
+
+const monthWeekLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 const dayPlans: DayPlan[] = [
   {
@@ -129,6 +153,13 @@ const dayPlans: DayPlan[] = [
     image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80",
   },
   {
+    id: "fullbody",
+    title: "Все тело",
+    subtitle: "Сбалансированная тренировка на основные группы",
+    icon: "fullbody",
+    image: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=80",
+  },
+  {
     id: "cardio",
     title: "День кардио",
     subtitle: "Выносливость и жиросжигание",
@@ -138,7 +169,7 @@ const dayPlans: DayPlan[] = [
   {
     id: "custom",
     title: "Своя программа",
-    subtitle: "Собери тренировку из базы упражнений",
+    subtitle: "Дай название и собери упражнения под себя",
     icon: "custom",
     image: "https://images.unsplash.com/photo-1599058917212-d750089bc07e?auto=format&fit=crop&w=1200&q=80",
   },
@@ -157,9 +188,16 @@ const exerciseDefinitionsByPlan: Record<BasePlanId, ExerciseDefinition[]> = {
 };
 
 const allLibraryExercises = Array.from(new Set(Object.values(baseExercisesByPlan).flat()));
+const fullBodyLibraryExercises = Array.from(
+  new Set([
+    ...baseExercisesByPlan.upper.slice(0, 10),
+    ...baseExercisesByPlan.lower.slice(0, 10),
+  ]),
+);
 
 const exercisesByPlan: Record<DayPlanId, string[]> = {
   ...baseExercisesByPlan,
+  fullbody: fullBodyLibraryExercises,
   custom: allLibraryExercises,
 };
 
@@ -198,11 +236,12 @@ function createDropSet(weight = "", reps = ""): DropSet {
   };
 }
 
-function createSet(weight = "", reps = "", dropSets?: DropSet[]): WorkoutSet {
+function createSet(weight = "", reps = "", dropSets?: DropSet[], speed = ""): WorkoutSet {
   return {
     id: createId(),
     weight: sanitizeNumber(weight, 3),
-    reps: sanitizeNumber(reps, 2),
+    reps: sanitizeNumber(reps, 3),
+    speed: sanitizeNumber(speed, 3),
     dropSets: dropSets && dropSets.length > 0 ? dropSets : [],
   };
 }
@@ -220,6 +259,7 @@ function buildDefaultSessionByPlan(): SessionByPlan {
   return {
     upper: [],
     lower: [],
+    fullbody: [],
     cardio: [],
     custom: [],
   };
@@ -260,6 +300,7 @@ function normalizeExercises(input: unknown): SessionExercise[] {
             typeof setObj.weight === "string" ? setObj.weight : String(setObj.weight ?? ""),
             typeof setObj.reps === "string" ? setObj.reps : String(setObj.reps ?? ""),
             dropSets,
+            typeof setObj.speed === "string" ? setObj.speed : String(setObj.speed ?? ""),
           );
         })
         .filter((setItem): setItem is WorkoutSet => Boolean(setItem));
@@ -287,6 +328,7 @@ function loadSessionByPlan(): SessionByPlan {
     return {
       upper: normalizeExercises(parsed.upper),
       lower: normalizeExercises(parsed.lower),
+      fullbody: normalizeExercises(parsed.fullbody),
       cardio: normalizeExercises(parsed.cardio),
       custom: normalizeExercises(parsed.custom),
     };
@@ -356,6 +398,62 @@ function loadProfileState(): ProfileState {
   }
 }
 
+function loadCustomPrograms(): CustomProgram[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_PROGRAMS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((rawItem) => {
+        const item = parseObject(rawItem);
+        if (!item) return null;
+
+        const name =
+          typeof item.name === "string" && item.name.trim().length > 0
+            ? item.name.trim().slice(0, 60)
+            : "";
+        if (!name) return null;
+
+        return {
+          id: typeof item.id === "string" && item.id ? item.id : createId(),
+          name,
+          exercises: normalizeExercises(item.exercises),
+        } as CustomProgram;
+      })
+      .filter((program): program is CustomProgram => Boolean(program));
+  } catch {
+    return [];
+  }
+}
+
+function loadWorkoutLogs(): WorkoutLog[] {
+  try {
+    const raw = localStorage.getItem(WORKOUT_LOGS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((rawItem) => {
+        const item = parseObject(rawItem);
+        if (!item) return null;
+        const dateKey = typeof item.dateKey === "string" ? item.dateKey : "";
+        if (!dateKey) return null;
+
+        return {
+          id: typeof item.id === "string" && item.id ? item.id : createId(),
+          dateKey,
+          title: typeof item.title === "string" ? item.title.slice(0, 80) : "Тренировка",
+        } as WorkoutLog;
+      })
+      .filter((entry): entry is WorkoutLog => Boolean(entry));
+  } catch {
+    return [];
+  }
+}
+
 function formatDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -398,6 +496,27 @@ function buildCalendarWeek(anchorDate: Date): CalendarDay[] {
   });
 }
 
+function buildMonthCalendar(anchorDate: Date): MonthCalendarDay[] {
+  const start = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+  const startOffset = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - startOffset);
+
+  const todayKey = formatDateKey(new Date());
+  const currentMonth = anchorDate.getMonth();
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+
+    return {
+      key: formatDateKey(date),
+      dayNumber: date.getDate(),
+      inCurrentMonth: date.getMonth() === currentMonth,
+      isToday: formatDateKey(date) === todayKey,
+    };
+  });
+}
+
 function formatSeconds(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
   const minutes = Math.floor(safe / 60);
@@ -423,11 +542,12 @@ function AppIcon({ name, className }: { name: IconName; className?: string }) {
     );
   }
 
-  if (name === "profile") {
+  if (name === "progress") {
     return (
       <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-        <circle cx="12" cy="8.2" r="3.2" stroke="currentColor" strokeWidth="1.7" />
-        <path d="M5.8 18.4C6.9 15.6 9 14.2 12 14.2C15 14.2 17.1 15.6 18.2 18.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <path d="M5.2 18.6V13.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <path d="M12 18.6V9.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <path d="M18.8 18.6V5.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       </svg>
     );
   }
@@ -449,6 +569,17 @@ function AppIcon({ name, className }: { name: IconName; className?: string }) {
         <path d="M16 8.5V14.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
         <path d="M4.5 9V14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
         <path d="M19.5 9V14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (name === "fullbody") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+        <circle cx="12" cy="6.6" r="2.2" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M12 8.8V14.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <path d="M8.7 11.2H15.3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <path d="M9.8 19.2L12 14.6L14.2 19.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   }
@@ -520,16 +651,6 @@ function MeasurementIcon({ name, className }: { name: MeasurementIconName; class
     );
   }
 
-  if (name === "chest") {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-        <path d="M7 6.6C8.1 7.9 9.4 8.6 12 8.6C14.6 8.6 15.9 7.9 17 6.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M6.4 11.2C7.5 12.4 9.2 13.2 12 13.2C14.8 13.2 16.5 12.4 17.6 11.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M8 18.2C8.8 16.2 10 15.2 12 15.2C14 15.2 15.2 16.2 16 18.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
   if (name === "waist") {
     return (
       <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -540,32 +661,11 @@ function MeasurementIcon({ name, className }: { name: MeasurementIconName; class
     );
   }
 
-  if (name === "glutes") {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-        <path d="M8.5 6.2C8.5 8 9.4 9.6 12 9.6C14.6 9.6 15.5 8 15.5 6.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M6.5 11.4C6.5 14.9 8.5 18 12 18C15.5 18 17.5 14.9 17.5 11.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M3.8 13.6C5.3 13.6 6.3 12.7 6.3 11.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M20.2 13.6C18.7 13.6 17.7 12.7 17.7 11.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
-  if (name === "thighs") {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-        <path d="M9 5.8L11.3 9.8L9.5 13.2L10.8 18.2H13.4L12.1 13.2L14.4 9.8L13 5.8H9Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      </svg>
-    );
-  }
-
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      <path d="M8.3 6.8C9.4 8.3 10.2 9.4 10.2 11.1C10.2 13 8.7 14.5 6.8 14.5C4.9 14.5 3.4 13 3.4 11.1C3.4 9.4 4.2 8.3 5.3 6.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M18.7 6.8C19.8 8.3 20.6 9.4 20.6 11.1C20.6 13 19.1 14.5 17.2 14.5C15.3 14.5 13.8 13 13.8 11.1C13.8 9.4 14.6 8.3 15.7 6.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M6.8 15.6V18.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M17.2 15.6V18.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M6.8 18.2H17.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M8.6 4.8C9.5 6.1 10.6 6.8 12 6.8C13.4 6.8 14.5 6.1 15.4 4.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M8 9.5C8 9.5 9.2 11 12 11C14.8 11 16 9.5 16 9.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M6.8 19.2C7.8 16.4 9.3 14.8 12 14.8C14.7 14.8 16.2 16.4 17.2 19.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -579,6 +679,9 @@ export default function App() {
   const [screen, setScreen] = useState<AppScreen>("home");
   const [selectedPlanId, setSelectedPlanId] = useState<DayPlanId>("upper");
   const [sessionByPlan, setSessionByPlan] = useState<SessionByPlan>(() => loadSessionByPlan());
+  const [customPrograms, setCustomPrograms] = useState<CustomProgram[]>(() => loadCustomPrograms());
+  const [selectedCustomProgramId, setSelectedCustomProgramId] = useState<string | null>(null);
+  const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>(() => loadWorkoutLogs());
   const [profile, setProfile] = useState<ProfileState>(() => loadProfileState());
   const [isCreateWorkoutOpen, setIsCreateWorkoutOpen] = useState(false);
   const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
@@ -590,18 +693,48 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [customSearch, setCustomSearch] = useState("");
   const [customFilter, setCustomFilter] = useState<CustomLibraryFilter>("all");
+  const [customWorkoutNameInput, setCustomWorkoutNameInput] = useState("");
+  const [customExerciseInput, setCustomExerciseInput] = useState("");
+  const [monthAnchor] = useState(() => new Date());
   const [isMeasurementsExpanded, setIsMeasurementsExpanded] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey(new Date()));
   const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
     upper: exercisesByPlan.upper[0] ?? "",
     lower: exercisesByPlan.lower[0] ?? "",
+    fullbody: exercisesByPlan.fullbody[0] ?? "",
     cardio: exercisesByPlan.cardio[0] ?? "",
     custom: exercisesByPlan.custom[0] ?? "",
   });
 
-  const selectedPlan = dayPlanById[selectedPlanId];
-  const activeExercises = sessionByPlan[selectedPlanId];
+  const effectiveCustomProgramId = selectedCustomProgramId ?? customPrograms[0]?.id ?? null;
+  const selectedCustomProgram =
+    effectiveCustomProgramId !== null
+      ? customPrograms.find((program) => program.id === effectiveCustomProgramId) ?? null
+      : null;
+
+  const selectedPlan =
+    selectedPlanId === "custom"
+      ? {
+          ...dayPlanById.custom,
+          title: selectedCustomProgram?.name ?? "Своя программа",
+          subtitle: "Индивидуальная тренировка",
+        }
+      : dayPlanById[selectedPlanId];
+
+  const activeExercises =
+    selectedPlanId === "custom" ? selectedCustomProgram?.exercises ?? [] : sessionByPlan[selectedPlanId];
+  const isCardioWorkout = selectedPlanId === "cardio";
+
+  const allExercisesForProgress = useMemo(
+    () => [
+      ...Object.values(sessionByPlan).flat(),
+      ...customPrograms.flatMap((program) => program.exercises),
+    ],
+    [sessionByPlan, customPrograms],
+  );
+
   const weekDays = useMemo(() => buildCalendarWeek(new Date()), []);
+  const monthDays = useMemo(() => buildMonthCalendar(monthAnchor), [monthAnchor]);
   const selectedCalendarDay = weekDays.find((day) => day.key === selectedDateKey) ?? weekDays[0] ?? null;
   const latestMeasurement = profile.measurements[0] ?? null;
   const summaryMeasurement = {
@@ -614,11 +747,20 @@ export default function App() {
     thighs: latestMeasurement?.thighs || profile.thighs,
     belly: latestMeasurement?.belly || profile.belly,
   };
+  const workoutDateSet = useMemo(
+    () => new Set(workoutLogs.map((entry) => entry.dateKey)),
+    [workoutLogs],
+  );
+  const monthLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(monthAnchor),
+    [monthAnchor],
+  );
 
   const normalizedCustomSearch = customSearch.trim().toLowerCase();
   const customExerciseNameSet = useMemo(
-    () => new Set(sessionByPlan.custom.map((exercise) => exercise.name.toLowerCase())),
-    [sessionByPlan.custom],
+    () => new Set((selectedCustomProgram?.exercises ?? []).map((exercise) => exercise.name.toLowerCase())),
+    [selectedCustomProgram],
   );
 
   const filteredCustomSections = useMemo(
@@ -647,7 +789,7 @@ export default function App() {
   );
 
   const plansWithWorkouts = useMemo(
-    () => dayPlans.filter((plan) => sessionByPlan[plan.id].length > 0),
+    () => dayPlans.filter((plan) => plan.id !== "custom" && sessionByPlan[plan.id].length > 0),
     [sessionByPlan],
   );
 
@@ -655,19 +797,27 @@ export default function App() {
     () =>
       dayPlans.reduce(
         (acc, plan) => {
+          if (plan.id === "custom") {
+            acc[plan.id] = customPrograms.reduce(
+              (sumPrograms, program) =>
+                sumPrograms + program.exercises.reduce((sumSets, exercise) => sumSets + exercise.sets.length, 0),
+              0,
+            );
+            return acc;
+          }
+
           acc[plan.id] = sessionByPlan[plan.id].reduce((sum, exercise) => sum + exercise.sets.length, 0);
           return acc;
         },
         {} as Record<DayPlanId, number>,
       ),
-    [sessionByPlan],
+    [sessionByPlan, customPrograms],
   );
 
   const personalRecords = useMemo(() => {
     const records = new Map<string, number>();
 
-    Object.values(sessionByPlan)
-      .flat()
+    allExercisesForProgress
       .forEach((exercise) => {
         const maxWeight = exercise.sets.reduce((max, setItem) => {
           const weight = Number(setItem.weight);
@@ -680,7 +830,40 @@ export default function App() {
       });
 
     return records;
-  }, [sessionByPlan]);
+  }, [allExercisesForProgress]);
+
+  const topExercises = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    allExercisesForProgress.forEach((exercise) => {
+      counts.set(exercise.name, (counts.get(exercise.name) ?? 0) + 1);
+    });
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+  }, [allExercisesForProgress]);
+
+  const workoutStats = useMemo(() => {
+    const now = new Date();
+    const weekStart = getWeekStart(now);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    let week = 0;
+    let month = 0;
+
+    workoutLogs.forEach((entry) => {
+      const date = new Date(`${entry.dateKey}T00:00:00`);
+      if (date >= weekStart) week += 1;
+      if (date >= monthStart) month += 1;
+    });
+
+    return {
+      week,
+      month,
+      total: workoutLogs.length,
+    };
+  }, [workoutLogs]);
 
   useEffect(() => {
     tg?.ready();
@@ -694,6 +877,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
   }, [profile]);
+
+  useEffect(() => {
+    localStorage.setItem(CUSTOM_PROGRAMS_KEY, JSON.stringify(customPrograms));
+  }, [customPrograms]);
+
+  useEffect(() => {
+    localStorage.setItem(WORKOUT_LOGS_KEY, JSON.stringify(workoutLogs));
+  }, [workoutLogs]);
 
   useEffect(() => {
     if (!notice) return;
@@ -726,18 +917,57 @@ export default function App() {
   }
 
   function updateExercisesForPlan(planId: DayPlanId, updater: (prev: SessionExercise[]) => SessionExercise[]) {
+    if (planId === "custom") {
+      if (!effectiveCustomProgramId) return;
+
+      setCustomPrograms((prev) =>
+        prev.map((program) =>
+          program.id === effectiveCustomProgramId ? { ...program, exercises: updater(program.exercises) } : program,
+        ),
+      );
+      return;
+    }
+
     setSessionByPlan((prev) => ({
       ...prev,
       [planId]: updater(prev[planId]),
     }));
   }
 
-  function openWorkout(planId: DayPlanId) {
+  function openWorkout(planId: DayPlanId, options?: { customProgramId?: string; logEvent?: boolean }) {
     setSelectedPlanId(planId);
+    if (planId === "custom") {
+      const targetCustomId =
+        options?.customProgramId ?? effectiveCustomProgramId ?? customPrograms[0]?.id ?? null;
+      setSelectedCustomProgramId(targetCustomId);
+      const targetProgram = customPrograms.find((program) => program.id === targetCustomId);
+      setCustomWorkoutNameInput(targetProgram?.name ?? "");
+      setIsCustomBuilderOpen(true);
+    }
     setScreen("workout");
     setIsCreateWorkoutOpen(false);
     setIsExercisePickerOpen(false);
-    setIsCustomBuilderOpen(false);
+    if (planId !== "custom") {
+      setIsCustomBuilderOpen(false);
+    }
+
+    if (options?.logEvent) {
+      const dateKey = formatDateKey(new Date());
+      const title =
+        planId === "custom"
+          ? customPrograms.find((program) => program.id === (options.customProgramId ?? effectiveCustomProgramId))
+              ?.name ?? "Своя программа"
+          : dayPlanById[planId].title;
+
+      setWorkoutLogs((prev) => [
+        ...prev,
+        {
+          id: createId(),
+          dateKey,
+          title,
+        },
+      ]);
+    }
   }
 
   function goHome() {
@@ -748,15 +978,65 @@ export default function App() {
     setIsRestPanelOpen(false);
   }
 
-  function openProfile() {
-    setScreen("profile");
+  function openProgress() {
+    setScreen("progress");
     setIsCreateWorkoutOpen(false);
     setIsExercisePickerOpen(false);
     setIsCustomBuilderOpen(false);
     setIsRestPanelOpen(false);
   }
 
+  function createCustomProgram() {
+    const trimmed = customWorkoutNameInput.trim();
+    const defaultName = `Моя программа ${customPrograms.length + 1}`;
+    const name = (trimmed || defaultName).slice(0, 60);
+
+    const program: CustomProgram = {
+      id: createId(),
+      name,
+      exercises: [],
+    };
+
+    setCustomPrograms((prev) => [...prev, program]);
+    setCustomWorkoutNameInput(program.name);
+    setSelectedCustomProgramId(program.id);
+    setSelectedPlanId("custom");
+    setScreen("workout");
+    setIsCreateWorkoutOpen(false);
+    setIsCustomBuilderOpen(true);
+    setNotice(`Создана программа: ${name}`);
+  }
+
+  function renameSelectedCustomProgram(name: string) {
+    if (!effectiveCustomProgramId) return;
+    const trimmed = name.trim().slice(0, 60);
+    if (!trimmed) return;
+
+    setCustomPrograms((prev) =>
+      prev.map((program) =>
+        program.id === effectiveCustomProgramId ? { ...program, name: trimmed } : program,
+      ),
+    );
+  }
+
+  function addManualCustomExercise() {
+    if (selectedPlanId !== "custom") return;
+    const name = customExerciseInput.trim().slice(0, 80);
+    if (!name) {
+      setNotice("Введи название упражнения");
+      return;
+    }
+
+    addExerciseToPlan("custom", name);
+    setCustomExerciseInput("");
+  }
+
   function addExerciseToPlan(planId: DayPlanId, exerciseName: string) {
+    if (planId === "custom" && !effectiveCustomProgramId) {
+      setNotice("Сначала создай свою программу");
+      return;
+    }
+
     const normalizedName = (getExerciseDefinition(exerciseName)?.name ?? exerciseName).trim();
     if (!normalizedName) return;
 
@@ -820,7 +1100,7 @@ export default function App() {
   }
 
   function updateSetValue(exerciseId: string, setId: string, field: SetField, value: string) {
-    const sanitized = sanitizeNumber(value, field === "weight" ? 3 : 2);
+    const sanitized = sanitizeNumber(value, 3);
 
     updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) => {
@@ -1037,14 +1317,45 @@ export default function App() {
                 <p className="screen-subtitle">Привет, {userName}</p>
               </div>
 
-              <button type="button" className="avatar-btn" onClick={openProfile} aria-label="Открыть профиль">
+              <button type="button" className="avatar-btn" onClick={openProgress} aria-label="Открыть прогресс">
                 {userPhoto ? (
                   <img src={userPhoto} alt={userName} className="avatar-img" />
                 ) : (
-                  <AppIcon name="profile" className="app-icon app-icon-md" />
+                  <AppIcon name="progress" className="app-icon app-icon-md" />
                 )}
               </button>
             </header>
+
+            <section className="home-calendar">
+              <div className="home-calendar-head">
+                <p className="section-title">Календарь</p>
+                <p className="home-calendar-month">{monthLabel}</p>
+              </div>
+
+              <div className="home-calendar-week">
+                {monthWeekLabels.map((label) => (
+                  <span key={label}>{label}</span>
+                ))}
+              </div>
+
+              <div className="home-calendar-grid">
+                {monthDays.map((day) => {
+                  const hasWorkout = workoutDateSet.has(day.key);
+
+                  return (
+                    <div
+                      key={day.key}
+                      className={`home-calendar-day ${day.inCurrentMonth ? "" : "is-muted"} ${
+                        day.isToday ? "is-today" : ""
+                      } ${hasWorkout ? "has-workout" : ""}`}
+                    >
+                      <span>{day.dayNumber}</span>
+                      {hasWorkout ? <i aria-hidden="true" /> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
 
             <section className="measurements-card">
               <div className="measurements-head">
@@ -1073,24 +1384,8 @@ export default function App() {
                   <span className="measurement-item-value">{formatMetric(summaryMeasurement.weight, " кг")}</span>
                 </div>
                 <div className="measurement-item" role="listitem">
-                  <MeasurementIcon name="chest" className="measurement-item-icon" />
-                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.chest, " см")}</span>
-                </div>
-                <div className="measurement-item" role="listitem">
                   <MeasurementIcon name="waist" className="measurement-item-icon" />
                   <span className="measurement-item-value">{formatMetric(summaryMeasurement.waist, " см")}</span>
-                </div>
-                <div className="measurement-item" role="listitem">
-                  <MeasurementIcon name="glutes" className="measurement-item-icon" />
-                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.glutes, " см")}</span>
-                </div>
-                <div className="measurement-item" role="listitem">
-                  <MeasurementIcon name="thighs" className="measurement-item-icon" />
-                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.thighs, " см")}</span>
-                </div>
-                <div className="measurement-item" role="listitem">
-                  <MeasurementIcon name="belly" className="measurement-item-icon" />
-                  <span className="measurement-item-value">{formatMetric(summaryMeasurement.belly, " см")}</span>
                 </div>
               </div>
 
@@ -1227,11 +1522,18 @@ export default function App() {
 
               {isCreateWorkoutOpen ? (
                 <div className="plan-picker action-drawer" aria-label="Выбрать тренировочный день">
-                  {dayPlans.map((plan) => {
+                  {dayPlans
+                    .filter((plan) => plan.id !== "custom")
+                    .map((plan) => {
                     const exerciseCount = sessionByPlan[plan.id].length;
 
                     return (
-                      <button key={plan.id} type="button" className="plan-option" onClick={() => openWorkout(plan.id)}>
+                      <button
+                        key={plan.id}
+                        type="button"
+                        className="plan-option"
+                        onClick={() => openWorkout(plan.id, { logEvent: true })}
+                      >
                         <span className="plan-option-icon" aria-hidden="true">
                           <AppIcon name={plan.icon} className="app-icon app-icon-sm" />
                         </span>
@@ -1243,6 +1545,35 @@ export default function App() {
                       </button>
                     );
                   })}
+
+                  <div className="custom-programs-head">
+                    <span>Свои программы</span>
+                    <button type="button" className="mini-plus-btn" onClick={createCustomProgram} aria-label="Создать программу">
+                      +
+                    </button>
+                  </div>
+
+                  {customPrograms.length === 0 ? (
+                    <p className="empty-state">Добавь свою программу через +</p>
+                  ) : (
+                    customPrograms.map((program) => (
+                      <button
+                        key={program.id}
+                        type="button"
+                        className="plan-option"
+                        onClick={() => openWorkout("custom", { customProgramId: program.id, logEvent: true })}
+                      >
+                        <span className="plan-option-icon" aria-hidden="true">
+                          <AppIcon name="custom" className="app-icon app-icon-sm" />
+                        </span>
+                        <span className="plan-option-copy">
+                          <strong>{program.name}</strong>
+                          <small>Собственная программа</small>
+                        </span>
+                        <span className="plan-option-count">{program.exercises.length}</span>
+                      </button>
+                    ))
+                  )}
                 </div>
               ) : null}
             </section>
@@ -1252,7 +1583,7 @@ export default function App() {
                 <p className="section-title">Мои тренировки</p>
               </div>
 
-              {plansWithWorkouts.length === 0 ? (
+              {plansWithWorkouts.length === 0 && customPrograms.length === 0 ? (
                 <p className="empty-state">Пока пусто. Добавь первую тренировку через кнопку выше.</p>
               ) : (
                 <div className="saved-list">
@@ -1267,7 +1598,26 @@ export default function App() {
                           {sessionByPlan[plan.id].length} упражнений · {setCountsByPlan[plan.id]} подходов
                         </small>
                       </div>
-                      <button type="button" className="ghost-btn" onClick={() => openWorkout(plan.id)}>
+                      <button type="button" className="ghost-btn" onClick={() => openWorkout(plan.id, { logEvent: true })}>
+                        Открыть
+                      </button>
+                    </article>
+                  ))}
+
+                  {customPrograms.map((program) => (
+                    <article key={program.id} className="saved-card">
+                      <span className="saved-icon" aria-hidden="true">
+                        <AppIcon name="custom" className="app-icon app-icon-sm" />
+                      </span>
+                      <div className="saved-copy">
+                        <strong>{program.name}</strong>
+                        <small>{program.exercises.length} упражнений</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        onClick={() => openWorkout("custom", { customProgramId: program.id, logEvent: true })}
+                      >
                         Открыть
                       </button>
                     </article>
@@ -1292,11 +1642,11 @@ export default function App() {
                 <h2 className="screen-title-sm">{selectedPlan.title}</h2>
               </div>
 
-              <button type="button" className="avatar-btn" onClick={openProfile} aria-label="Открыть профиль">
+              <button type="button" className="avatar-btn" onClick={openProgress} aria-label="Открыть прогресс">
                 {userPhoto ? (
                   <img src={userPhoto} alt={userName} className="avatar-img" />
                 ) : (
-                  <AppIcon name="profile" className="app-icon app-icon-md" />
+                  <AppIcon name="progress" className="app-icon app-icon-md" />
                 )}
               </button>
             </header>
@@ -1400,7 +1750,55 @@ export default function App() {
               <section className="custom-program-builder action-drawer" aria-label="Конструктор своей программы">
                 <div className="builder-head">
                   <p className="builder-title">База упражнений</p>
-                  <p className="builder-subtitle">Выбери, что добавить в свою программу</p>
+                  <p className="builder-subtitle">Название и упражнения для своей программы</p>
+                </div>
+
+                {!selectedCustomProgram ? (
+                  <div className="custom-name-row">
+                    <input
+                      className="custom-search-input"
+                      type="text"
+                      placeholder="Название новой программы"
+                      value={customWorkoutNameInput}
+                      onChange={(event) => setCustomWorkoutNameInput(event.target.value)}
+                    />
+                    <button type="button" className="picker-add-btn" onClick={createCustomProgram}>
+                      Создать
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="custom-name-row">
+                  <input
+                    className="custom-search-input"
+                    type="text"
+                    placeholder="Название программы"
+                    value={customWorkoutNameInput}
+                    onChange={(event) => setCustomWorkoutNameInput(event.target.value)}
+                    disabled={!selectedCustomProgram}
+                  />
+                  <button
+                    type="button"
+                    className="picker-add-btn"
+                    onClick={() => renameSelectedCustomProgram(customWorkoutNameInput)}
+                    disabled={!selectedCustomProgram}
+                  >
+                    Переименовать
+                  </button>
+                </div>
+
+                <div className="custom-name-row">
+                  <input
+                    className="custom-search-input"
+                    type="text"
+                    placeholder="Добавить свое упражнение"
+                    value={customExerciseInput}
+                    onChange={(event) => setCustomExerciseInput(event.target.value)}
+                    disabled={!selectedCustomProgram}
+                  />
+                  <button type="button" className="picker-add-btn" onClick={addManualCustomExercise} disabled={!selectedCustomProgram}>
+                    Добавить
+                  </button>
                 </div>
 
                 <input
@@ -1409,6 +1807,7 @@ export default function App() {
                   placeholder="Поиск упражнения"
                   value={customSearch}
                   onChange={(event) => setCustomSearch(event.target.value)}
+                  disabled={!selectedCustomProgram}
                 />
 
                 <div className="builder-filters" aria-label="Фильтр базы упражнений">
@@ -1418,6 +1817,7 @@ export default function App() {
                       type="button"
                       className={`builder-filter-btn ${customFilter === option.id ? "is-active" : ""}`}
                       onClick={() => setCustomFilter(option.id)}
+                      disabled={!selectedCustomProgram}
                     >
                       {option.label}
                     </button>
@@ -1448,6 +1848,7 @@ export default function App() {
                                 type="button"
                                 className={`library-item ${isAdded ? "is-added" : ""}`}
                                 onClick={() => toggleExerciseInCustomProgram(exerciseName)}
+                                disabled={!selectedCustomProgram}
                               >
                                 <span className="library-item-main">
                                   <img src={exerciseDef.image} alt={exerciseName} className="library-item-thumb" loading="lazy" />
@@ -1551,7 +1952,7 @@ export default function App() {
                           <strong>{exercise.name}</strong>
                           <small>{exercise.sets.length} подходов</small>
                         </span>
-                        {prWeight > 0 ? <span className="exercise-pr">PR {prWeight} кг</span> : null}
+                        {!isCardioWorkout && prWeight > 0 ? <span className="exercise-pr">PR {prWeight} кг</span> : null}
                         <span className="exercise-chevron" aria-hidden="true">
                           ▾
                         </span>
@@ -1577,9 +1978,9 @@ export default function App() {
 
                           <div className="set-head">
                             <span>№</span>
-                            <span>вес</span>
-                            <span>повт.</span>
-                            <span>дроп</span>
+                            <span>{isCardioWorkout ? "мин" : "вес"}</span>
+                            <span>{isCardioWorkout ? "км" : "повт."}</span>
+                            <span>{isCardioWorkout ? "скор." : "дроп"}</span>
                             <span>удал.</span>
                           </div>
 
@@ -1603,15 +2004,28 @@ export default function App() {
                                   value={setItem.reps}
                                   onChange={(event) => updateSetValue(exercise.id, setItem.id, "reps", event.target.value)}
                                 />
-                                <button type="button" className="drop-toggle-btn" onClick={() => addDropSet(exercise.id, setItem.id)}>
-                                  дроп+
-                                </button>
+                                {isCardioWorkout ? (
+                                  <input
+                                    className="set-input"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    placeholder="0"
+                                    value={setItem.speed}
+                                    onChange={(event) =>
+                                      updateSetValue(exercise.id, setItem.id, "speed", event.target.value)
+                                    }
+                                  />
+                                ) : (
+                                  <button type="button" className="drop-toggle-btn" onClick={() => addDropSet(exercise.id, setItem.id)}>
+                                    дроп+
+                                  </button>
+                                )}
                                 <button type="button" className="set-remove-btn" onClick={() => removeSet(exercise.id, setItem.id)}>
                                   ×
                                 </button>
                               </div>
 
-                              {setItem.dropSets.length > 0 ? (
+                              {!isCardioWorkout && setItem.dropSets.length > 0 ? (
                                 <div className="drop-board">
                                   {setItem.dropSets.map((dropSet, dropIndex) => (
                                     <div key={dropSet.id} className="drop-row">
@@ -1668,7 +2082,7 @@ export default function App() {
           </>
         ) : null}
 
-        {screen === "profile" ? (
+        {screen === "progress" ? (
           <>
             <header className="screen-head screen-head-tight">
               <button type="button" className="icon-btn" onClick={goHome} aria-label="На главную">
@@ -1676,8 +2090,8 @@ export default function App() {
               </button>
 
               <div className="head-copy">
-                <p className="screen-kicker">Профиль</p>
-                <h2 className="screen-title-sm">Аккаунт</h2>
+                <p className="screen-kicker">Прогресс</p>
+                <h2 className="screen-title-sm">Статистика и упражнения</h2>
               </div>
 
               <button type="button" className="icon-btn" onClick={() => openWorkout(selectedPlanId)} aria-label="Открыть тренировку">
@@ -1686,24 +2100,43 @@ export default function App() {
             </header>
 
             <section className="profile-card">
-              <div className="profile-top">
-                <div className="profile-avatar">
-                  {userPhoto ? (
-                    <img src={userPhoto} alt={userName} className="avatar-img" />
-                  ) : (
-                    <AppIcon name="profile" className="app-icon app-icon-lg" />
-                  )}
-                </div>
-
-                <div className="profile-copy">
-                  <p className="profile-name">{userName}</p>
-                  <p className="profile-note">Замеры и прогресс доступны на главной странице</p>
-                </div>
+              <div className="section-head">
+                <p className="section-title">Тренировки</p>
               </div>
 
-              <p className="profile-hint">
-                Для новых замеров используй кнопку <strong>+</strong> в блоке <strong>Замеры</strong> на главной.
-              </p>
+              <div className="stats-grid">
+                <div className="stat-tile">
+                  <strong>{workoutStats.week}</strong>
+                  <span>За неделю</span>
+                </div>
+                <div className="stat-tile">
+                  <strong>{workoutStats.month}</strong>
+                  <span>За месяц</span>
+                </div>
+                <div className="stat-tile">
+                  <strong>{workoutStats.total}</strong>
+                  <span>Всего</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="measurements-card">
+              <div className="section-head">
+                <p className="section-title">Часто выбираемые упражнения</p>
+              </div>
+
+              {topExercises.length === 0 ? (
+                <p className="empty-state">Пока нет данных. Добавь упражнения в тренировки.</p>
+              ) : (
+                <div className="top-exercise-list">
+                  {topExercises.map(([name, count]) => (
+                    <article key={name} className="top-exercise-row">
+                      <span className="top-exercise-name">{name}</span>
+                      <span className="top-exercise-count">{count}</span>
+                    </article>
+                  ))}
+                </div>
+              )}
             </section>
 
             {notice ? <p className="inline-notice">{notice}</p> : null}
@@ -1723,12 +2156,12 @@ export default function App() {
           onClick={() => openWorkout(selectedPlanId)}
         >
           <AppIcon name={selectedPlan.icon} className="app-icon app-icon-sm" />
-          <span>Тренировка</span>
+          <span>Тренировки</span>
         </button>
 
-        <button type="button" className={`nav-btn ${screen === "profile" ? "is-active" : ""}`} onClick={openProfile}>
-          <AppIcon name="profile" className="app-icon app-icon-sm" />
-          <span>Профиль</span>
+        <button type="button" className={`nav-btn ${screen === "progress" ? "is-active" : ""}`} onClick={openProgress}>
+          <AppIcon name="progress" className="app-icon app-icon-sm" />
+          <span>Прогресс</span>
         </button>
       </nav>
     </div>
