@@ -1322,6 +1322,11 @@ export default function App() {
     triggerImpact("medium");
   }
 
+  function confirmExerciseSetsSaved() {
+    setNotice("Подходы и повторения сохранены");
+    triggerImpact("light");
+  }
+
   function startCustomProgramSwipe(programId: string, clientX: number) {
     customSwipeStartRef.current = { programId, x: clientX };
   }
@@ -2354,7 +2359,7 @@ export default function App() {
                             <button
                               type="button"
                               className="add-set-btn"
-                              onClick={saveWorkoutSetup}
+                              onClick={confirmExerciseSetsSaved}
                             >
                               Сохранить
                             </button>
