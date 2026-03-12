@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import {
-  baseExercisesByPlan,
   exerciseCatalogByPlan,
   formatMuscleList,
   getExerciseDefinition,
@@ -69,7 +68,6 @@ type SessionExercise = {
 };
 
 type SessionByPlan = Record<DayPlanId, SessionExercise[]>;
-type SelectedExerciseByPlan = Record<DayPlanId, string>;
 type SetField = "weight" | "reps" | "speed";
 type DropSetField = "weight" | "reps";
 
@@ -191,19 +189,11 @@ const exerciseDefinitionsByPlan: Record<BasePlanId, ExerciseDefinition[]> = {
   cardio: exerciseCatalogByPlan.cardio,
 };
 
-const allLibraryExercises = Array.from(new Set(Object.values(baseExercisesByPlan).flat()));
-const fullBodyLibraryExercises = Array.from(
-  new Set([
-    ...baseExercisesByPlan.upper.slice(0, 10),
-    ...baseExercisesByPlan.lower.slice(0, 10),
-    ...baseExercisesByPlan.core.slice(0, 6),
-  ]),
-);
-
-const exercisesByPlan: Record<DayPlanId, string[]> = {
-  ...baseExercisesByPlan,
-  fullbody: fullBodyLibraryExercises,
-  custom: allLibraryExercises,
+const librarySectionIdsByPlan: Record<Exclude<DayPlanId, "custom">, BasePlanId[]> = {
+  upper: ["upper"],
+  lower: ["lower"],
+  fullbody: ["upper", "lower", "core"],
+  cardio: ["cardio"],
 };
 
 const dayPlanById: Record<DayPlanId, DayPlan> = dayPlans.reduce(
@@ -728,6 +718,7 @@ export default function App() {
   const [restSeconds, setRestSeconds] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
   const [customSearch, setCustomSearch] = useState("");
+  const [workoutSearch, setWorkoutSearch] = useState("");
   const [customFilter, setCustomFilter] = useState<CustomLibraryFilter>("all");
   const [customWorkoutNameInput, setCustomWorkoutNameInput] = useState("");
   const [customExerciseInput, setCustomExerciseInput] = useState("");
@@ -744,13 +735,6 @@ export default function App() {
   const planSwipeStartRef = useRef<{ planId: DayPlanId; x: number; y: number } | null>(null);
   const customSwipeStartRef = useRef<{ programId: string; x: number; y: number } | null>(null);
   const exerciseSwipeStartRef = useRef<{ exerciseId: string; x: number; y: number } | null>(null);
-  const [selectedExerciseByPlan, setSelectedExerciseByPlan] = useState<SelectedExerciseByPlan>({
-    upper: exercisesByPlan.upper[0] ?? "",
-    lower: exercisesByPlan.lower[0] ?? "",
-    fullbody: exercisesByPlan.fullbody[0] ?? "",
-    cardio: exercisesByPlan.cardio[0] ?? "",
-    custom: exercisesByPlan.custom[0] ?? "",
-  });
 
   const effectiveCustomProgramId = selectedCustomProgramId ?? customPrograms[0]?.id ?? null;
   const selectedCustomProgram =
@@ -805,6 +789,11 @@ export default function App() {
   );
 
   const normalizedCustomSearch = customSearch.trim().toLowerCase();
+  const normalizedWorkoutSearch = workoutSearch.trim().toLowerCase();
+  const activeExerciseNameSet = useMemo(
+    () => new Set(activeExercises.map((exercise) => exercise.name.toLowerCase())),
+    [activeExercises],
+  );
   const customExerciseNameSet = useMemo(
     () => new Set((selectedCustomProgram?.exercises ?? []).map((exercise) => exercise.name.toLowerCase())),
     [selectedCustomProgram],
@@ -834,6 +823,33 @@ export default function App() {
         .filter((section) => section.exercises.length > 0),
     [customFilter, normalizedCustomSearch],
   );
+
+  const filteredWorkoutSections = useMemo(() => {
+    if (selectedPlanId === "custom") return [];
+
+    const targetSectionIds = librarySectionIdsByPlan[selectedPlanId];
+
+    return customLibrarySections
+      .filter((section) => targetSectionIds.includes(section.id))
+      .map((section) => ({
+        ...section,
+        exercises: exerciseDefinitionsByPlan[section.id].filter((exerciseDef) => {
+          if (!normalizedWorkoutSearch) return true;
+
+          const musclesText = [...exerciseDef.primaryMuscles, ...exerciseDef.secondaryMuscles]
+            .map((muscleKey) => muscleLabelByKey[muscleKey] ?? muscleKey)
+            .join(" ")
+            .toLowerCase();
+
+          return (
+            exerciseDef.name.toLowerCase().includes(normalizedWorkoutSearch) ||
+            exerciseDef.sourceName.toLowerCase().includes(normalizedWorkoutSearch) ||
+            musclesText.includes(normalizedWorkoutSearch)
+          );
+        }),
+      }))
+      .filter((section) => section.exercises.length > 0);
+  }, [selectedPlanId, normalizedWorkoutSearch]);
 
   const plansWithWorkouts = useMemo(
     () => dayPlans.filter((plan) => plan.id !== "custom" && sessionByPlan[plan.id].length > 0),
@@ -987,6 +1003,7 @@ export default function App() {
 
   function openWorkout(planId: DayPlanId, options?: { customProgramId?: string; logEvent?: boolean }) {
     setSelectedPlanId(planId);
+    setWorkoutSearch("");
     setPendingDeleteCustomProgramId(null);
     setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
@@ -1023,6 +1040,7 @@ export default function App() {
 
   function goHome() {
     setScreen("home");
+    setWorkoutSearch("");
     setPendingDeleteCustomProgramId(null);
     setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
@@ -1033,6 +1051,7 @@ export default function App() {
 
   function openProgress() {
     setScreen("progress");
+    setWorkoutSearch("");
     setPendingDeleteCustomProgramId(null);
     setSwipedPlanId(null);
     setSwipedCustomProgramId(null);
@@ -1125,16 +1144,6 @@ export default function App() {
     } else {
       setNotice("Это упражнение уже есть в списке");
     }
-  }
-
-  function addExerciseFromDropdown() {
-    const exerciseName = selectedExerciseByPlan[selectedPlanId];
-    if (!exerciseName) {
-      setNotice("Выбери упражнение");
-      return;
-    }
-
-    addExerciseToPlan(selectedPlanId, exerciseName, { allowDuplicate: true });
   }
 
   function toggleExerciseInCustomProgram(exerciseName: string) {
@@ -2138,8 +2147,11 @@ export default function App() {
 
             {selectedPlanId !== "custom" && isExercisePickerOpen ? (
               <section className="exercise-picker action-drawer" aria-label="Добавление упражнения">
-                <div className="drawer-head">
-                  <label htmlFor="exercise-select">Упражнения для: {selectedPlan.title}</label>
+                <div className="builder-head-row">
+                  <div className="builder-head">
+                    <p className="builder-title">База упражнений</p>
+                    <p className="builder-subtitle">Выбери упражнения для: {selectedPlan.title}</p>
+                  </div>
                   <button
                     type="button"
                     className="drawer-toggle-btn is-open"
@@ -2149,28 +2161,75 @@ export default function App() {
                     ▾
                   </button>
                 </div>
-                <div className="picker-row">
-                  <select
-                    id="exercise-select"
-                    className="picker-select"
-                    value={selectedExerciseByPlan[selectedPlanId]}
-                    onChange={(event) =>
-                      setSelectedExerciseByPlan((prev) => ({
-                        ...prev,
-                        [selectedPlanId]: event.target.value,
-                      }))
-                    }
-                  >
-                    {exercisesByPlan[selectedPlanId].map((exerciseName) => (
-                      <option key={exerciseName} value={exerciseName}>
-                        {exerciseName}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="button" className="picker-add-btn" onClick={addExerciseFromDropdown}>
-                    Добавить
-                  </button>
+
+                <input
+                  className="custom-search-input"
+                  type="search"
+                  placeholder="Поиск упражнения"
+                  value={workoutSearch}
+                  onChange={(event) => setWorkoutSearch(event.target.value)}
+                />
+
+                <div className="builder-library">
+                  {filteredWorkoutSections.length === 0 ? (
+                    <p className="builder-empty">По запросу ничего не найдено.</p>
+                  ) : (
+                    filteredWorkoutSections.map((section) => (
+                      <div key={section.id} className="library-section">
+                        <button
+                          type="button"
+                          className="library-section-title library-section-toggle"
+                          onClick={() => toggleLibrarySection(section.id)}
+                          aria-expanded={expandedLibrarySections.includes(section.id)}
+                        >
+                          <span className="library-section-icon" aria-hidden="true">
+                            <AppIcon name={section.icon} className="app-icon app-icon-xs" />
+                          </span>
+                          <span>{section.title}</span>
+                          <span
+                            className={`library-section-chevron ${expandedLibrarySections.includes(section.id) ? "is-open" : ""}`}
+                            aria-hidden="true"
+                          >
+                            ▾
+                          </span>
+                        </button>
+
+                        {expandedLibrarySections.includes(section.id) ? (
+                          <div className="library-items">
+                            {section.exercises.map((exerciseDef) => {
+                              const exerciseName = exerciseDef.name;
+                              const isAdded = activeExerciseNameSet.has(exerciseName.toLowerCase());
+
+                              return (
+                                <button
+                                  key={exerciseName}
+                                  type="button"
+                                  className={`library-item ${isAdded ? "is-added" : ""}`}
+                                  onClick={() => addExerciseToPlan(selectedPlanId, exerciseName, { allowDuplicate: true })}
+                                >
+                                  <span className="library-item-main">
+                                    <img
+                                      src={exerciseDef.image}
+                                      alt={exerciseName}
+                                      className="library-item-thumb"
+                                      loading="lazy"
+                                    />
+                                    <span className="library-item-copy">
+                                      <span className="library-item-name">{exerciseName}</span>
+                                      <span className="library-item-muscles">{formatMuscleList(exerciseDef.primaryMuscles, 2)}</span>
+                                    </span>
+                                  </span>
+                                  <span className="library-item-action">{isAdded ? "Добавить еще" : "Добавить"}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
                 </div>
+
                 <div className="drawer-actions">
                   <button type="button" className="secondary-btn" onClick={saveWorkoutSetup}>
                     Сохранить
