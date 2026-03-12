@@ -56,6 +56,9 @@ type WorkoutSet = {
   weight: string;
   reps: string;
   speed: string;
+  steps: string;
+  pulse: string;
+  calories: string;
   dropSets: DropSet[];
 };
 
@@ -68,7 +71,7 @@ type SessionExercise = {
 };
 
 type SessionByPlan = Record<DayPlanId, SessionExercise[]>;
-type SetField = "weight" | "reps" | "speed";
+type SetField = "weight" | "reps" | "speed" | "steps" | "pulse" | "calories";
 type DropSetField = "weight" | "reps";
 
 type CalendarDay = {
@@ -231,12 +234,23 @@ function createDropSet(weight = "", reps = ""): DropSet {
   };
 }
 
-function createSet(weight = "", reps = "", dropSets?: DropSet[], speed = ""): WorkoutSet {
+function createSet(
+  weight = "",
+  reps = "",
+  dropSets?: DropSet[],
+  speed = "",
+  steps = "",
+  pulse = "",
+  calories = "",
+): WorkoutSet {
   return {
     id: createId(),
     weight: sanitizeNumber(weight, 3),
     reps: sanitizeNumber(reps, 3),
     speed: sanitizeNumber(speed, 3),
+    steps: sanitizeNumber(steps, 5),
+    pulse: sanitizeNumber(pulse, 3),
+    calories: sanitizeNumber(calories, 4),
     dropSets: dropSets && dropSets.length > 0 ? dropSets : [],
   };
 }
@@ -297,6 +311,9 @@ function normalizeExercises(input: unknown): SessionExercise[] {
             typeof setObj.reps === "string" ? setObj.reps : String(setObj.reps ?? ""),
             dropSets,
             typeof setObj.speed === "string" ? setObj.speed : String(setObj.speed ?? ""),
+            typeof setObj.steps === "string" ? setObj.steps : String(setObj.steps ?? ""),
+            typeof setObj.pulse === "string" ? setObj.pulse : String(setObj.pulse ?? ""),
+            typeof setObj.calories === "string" ? setObj.calories : String(setObj.calories ?? ""),
           );
         })
         .filter((setItem): setItem is WorkoutSet => Boolean(setItem));
@@ -1200,7 +1217,15 @@ export default function App() {
   }
 
   function updateSetValue(exerciseId: string, setId: string, field: SetField, value: string) {
-    const sanitized = sanitizeNumber(value, 3);
+    const maxDigitsByField: Record<SetField, number> = {
+      weight: 3,
+      reps: 3,
+      speed: 3,
+      steps: 5,
+      pulse: 3,
+      calories: 4,
+    };
+    const sanitized = sanitizeNumber(value, maxDigitsByField[field]);
 
     updateExercisesForPlan(selectedPlanId, (prev) =>
       prev.map((exercise) => {
@@ -2577,17 +2602,20 @@ export default function App() {
                             />
                           </label>
 
-                          <div className="set-head">
+                          <div className={`set-head ${isCardioWorkout ? "cardio-set-head" : ""}`}>
                             <span>№</span>
                             <span>{isCardioWorkout ? "мин" : "вес"}</span>
                             <span>{isCardioWorkout ? "км" : "повт."}</span>
-                            <span>{isCardioWorkout ? "скор." : "дроп"}</span>
+                            <span>{isCardioWorkout ? "темп" : "дроп"}</span>
+                            {isCardioWorkout ? <span>шаги</span> : null}
+                            {isCardioWorkout ? <span>пульс</span> : null}
+                            {isCardioWorkout ? <span>ккал</span> : null}
                             <span>удал.</span>
                           </div>
 
                           {exercise.sets.map((setItem, index) => (
                             <div key={setItem.id} className="set-group">
-                              <div className="set-row">
+                              <div className={`set-row ${isCardioWorkout ? "cardio-set-row" : ""}`}>
                                 <span className="set-index">{index + 1}</span>
                                 <input
                                   className="set-input"
@@ -2606,16 +2634,48 @@ export default function App() {
                                   onChange={(event) => updateSetValue(exercise.id, setItem.id, "reps", event.target.value)}
                                 />
                                 {isCardioWorkout ? (
-                                  <input
-                                    className="set-input"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    placeholder="0"
-                                    value={setItem.speed}
-                                    onChange={(event) =>
-                                      updateSetValue(exercise.id, setItem.id, "speed", event.target.value)
-                                    }
-                                  />
+                                  <>
+                                    <input
+                                      className="set-input"
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      placeholder="0"
+                                      value={setItem.speed}
+                                      onChange={(event) =>
+                                        updateSetValue(exercise.id, setItem.id, "speed", event.target.value)
+                                      }
+                                    />
+                                    <input
+                                      className="set-input"
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      placeholder="0"
+                                      value={setItem.steps}
+                                      onChange={(event) =>
+                                        updateSetValue(exercise.id, setItem.id, "steps", event.target.value)
+                                      }
+                                    />
+                                    <input
+                                      className="set-input"
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      placeholder="0"
+                                      value={setItem.pulse}
+                                      onChange={(event) =>
+                                        updateSetValue(exercise.id, setItem.id, "pulse", event.target.value)
+                                      }
+                                    />
+                                    <input
+                                      className="set-input"
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      placeholder="0"
+                                      value={setItem.calories}
+                                      onChange={(event) =>
+                                        updateSetValue(exercise.id, setItem.id, "calories", event.target.value)
+                                      }
+                                    />
+                                  </>
                                 ) : (
                                   <button type="button" className="drop-toggle-btn" onClick={() => addDropSet(exercise.id, setItem.id)}>
                                     дроп+

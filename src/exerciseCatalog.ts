@@ -737,7 +737,7 @@ const exerciseCatalog: ExerciseDefinition[] = [
   makeExercise({
     id: "Step_Mill",
     plan: "cardio",
-    name: "Step Mill",
+    name: "Лестница (степ-милл)",
     sourceName: "Step Mill",
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes", "hamstrings"],
@@ -745,7 +745,7 @@ const exerciseCatalog: ExerciseDefinition[] = [
   makeExercise({
     id: "Stairmaster",
     plan: "cardio",
-    name: "Stairmaster",
+    name: "Лестница (стэрмастер)",
     sourceName: "Stairmaster",
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes", "hamstrings"],
@@ -826,7 +826,9 @@ const legacyAliasByName: Record<string, string> = {
   "Эллипс": "Эллиптический тренажер",
   "Скакалка интервалы": "Скакалка",
   "Ходьба в горку": "Ходьба на дорожке",
-  "Степпер": "Stairmaster",
+  "Степпер": "Лестница (стэрмастер)",
+  "Step Mill": "Лестница (степ-милл)",
+  "Stairmaster": "Лестница (стэрмастер)",
   "Air Bike интервалы": "Велотренажер",
   "HIIT-круг 20/40": "Бег на дорожке (интенсивный)",
 };

@@ -1181,11 +1181,20 @@
   align-items: center;
 }
 
+.set-head.cardio-set-head,
+.set-row.cardio-set-row {
+  grid-template-columns: 24px repeat(6, minmax(0, 1fr)) 34px;
+}
+
 .set-head {
   font-size: 0.69rem;
   font-weight: 800;
   text-transform: uppercase;
   color: var(--text-sub);
+}
+
+.set-head.cardio-set-head {
+  font-size: 0.58rem;
 }
 
 .set-group {
@@ -1209,6 +1218,16 @@
   font-size: 1rem;
   font-weight: 700;
   padding: 0 7px;
+}
+
+.set-row.cardio-set-row .set-input,
+.set-row.cardio-set-row .set-remove-btn {
+  min-height: 38px;
+}
+
+.set-row.cardio-set-row .set-input {
+  font-size: 0.84rem;
+  padding: 0 4px;
 }
 
 .drop-toggle-btn,
