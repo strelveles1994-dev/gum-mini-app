@@ -1524,6 +1524,16 @@ export default function App() {
   function startNewMeasurement() {
     setIsMeasurementsExpanded(true);
     setMeasurementDateInput(getTodayIsoDate());
+    setProfile((prev) => ({
+      ...prev,
+      height: "",
+      weight: "",
+      chest: "",
+      waist: "",
+      glutes: "",
+      thighs: "",
+      belly: "",
+    }));
   }
 
   function addMeasurement() {
@@ -1556,6 +1566,13 @@ export default function App() {
     setProfile((prev) => ({
       ...prev,
       measurements: [entry, ...prev.measurements].slice(0, 40),
+      height: "",
+      weight: "",
+      chest: "",
+      waist: "",
+      glutes: "",
+      thighs: "",
+      belly: "",
     }));
 
     setMeasurementDateInput(getTodayIsoDate());
