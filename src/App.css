@@ -1593,32 +1593,38 @@
 
 .bottom-nav {
   border-top: 1px solid var(--panel-border);
-  background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
-  backdrop-filter: blur(12px);
-  padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--panel-bg) 96%, transparent);
+  backdrop-filter: blur(14px);
+  padding: 10px 12px calc(18px + env(safe-area-inset-bottom));
   max-width: 560px;
   width: 100%;
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
   position: sticky;
   bottom: 0;
   z-index: 5;
+  box-shadow: 0 -10px 24px rgba(15, 22, 36, 0.12);
 }
 
 .nav-btn {
-  min-height: 42px;
+  min-height: 56px;
   border: 1px solid var(--panel-border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: transparent;
   color: var(--text-sub);
   display: grid;
   place-items: center;
-  gap: 3px;
-  font-size: 0.7rem;
+  gap: 4px;
+  font-size: 0.76rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.nav-btn .app-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .nav-btn.is-active {
