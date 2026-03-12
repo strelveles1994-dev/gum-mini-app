@@ -17,6 +17,9 @@
   --text-sub: #6a7386;
   --accent: #232d43;
   --accent-soft: #324366;
+  --tone-lime: #b7ff33;
+  --tone-pink: #ff4fa0;
+  --accent-on: #101726;
   --success: #22c7a0;
   --notice-bg: #f2f5fa;
   --shadow: 0 12px 28px rgba(26, 35, 56, 0.08);
@@ -32,6 +35,9 @@
   --text-sub: #9ca8bf;
   --accent: #f2f5fb;
   --accent-soft: #d7dff0;
+  --tone-lime: #b7ff33;
+  --tone-pink: #ff4fa0;
+  --accent-on: #101726;
   --success: #38d8b4;
   --notice-bg: #202a3a;
   --shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
@@ -73,7 +79,7 @@
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-sub);
+  color: color-mix(in srgb, var(--tone-pink) 78%, var(--text-sub));
 }
 
 .screen-title {
@@ -234,14 +240,14 @@
 }
 
 .home-calendar-day.has-workout {
-  background: color-mix(in srgb, var(--accent) 16%, var(--input-bg));
+  background: color-mix(in srgb, var(--tone-lime) 26%, var(--input-bg));
 }
 
 .home-calendar-day.has-workout i {
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--tone-lime);
   position: absolute;
   bottom: 2px;
 }
@@ -257,8 +263,8 @@
 
 .primary-btn {
   border: 0;
-  background: linear-gradient(120deg, var(--accent), var(--accent-soft));
-  color: #ffffff;
+  background: linear-gradient(118deg, var(--tone-lime), var(--tone-pink));
+  color: var(--accent-on);
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -267,8 +273,8 @@
 }
 
 .theme-dark .primary-btn {
-  color: #141a27;
-  background: linear-gradient(120deg, #e8edf8, #d2dbef);
+  color: var(--accent-on);
+  background: linear-gradient(118deg, var(--tone-lime), var(--tone-pink));
 }
 
 .primary-btn.is-open {
@@ -311,8 +317,8 @@
   height: 28px;
   border: 0;
   border-radius: 8px;
-  background: var(--accent);
-  color: #ffffff;
+  background: linear-gradient(118deg, var(--tone-lime), var(--tone-pink));
+  color: var(--accent-on);
   font-size: 1.08rem;
   line-height: 1;
   cursor: pointer;
@@ -568,12 +574,12 @@
 
 .calendar-day.is-active {
   border-color: transparent;
-  background: var(--accent);
-  color: #ffffff;
+  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
+  color: var(--accent-on);
 }
 
 .theme-dark .calendar-day.is-active {
-  color: #141a27;
+  color: var(--accent-on);
 }
 
 .calendar-weekday {
@@ -637,12 +643,12 @@
 
 .action-btn.is-active {
   border-color: transparent;
-  background: var(--accent);
-  color: #ffffff;
+  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
+  color: var(--accent-on);
 }
 
 .theme-dark .action-btn.is-active {
-  color: #141a27;
+  color: var(--accent-on);
 }
 
 .action-hint {
@@ -669,7 +675,7 @@
 }
 
 .action-btn.is-active .action-hint {
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(16, 23, 38, 0.74);
 }
 
 .action-btn-save {
@@ -817,12 +823,12 @@
 
 .builder-filter-btn.is-active {
   border-color: transparent;
-  background: var(--accent);
-  color: #ffffff;
+  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
+  color: var(--accent-on);
 }
 
 .theme-dark .builder-filter-btn.is-active {
-  color: #141a27;
+  color: var(--accent-on);
 }
 
 .builder-library {
@@ -916,8 +922,8 @@
 
 .library-item.is-added {
   border-color: transparent;
-  background: linear-gradient(120deg, #2bd8ab, #2cb9ff);
-  color: #ffffff;
+  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
+  color: var(--accent-on);
 }
 
 .library-item-main {
@@ -953,7 +959,7 @@
 }
 
 .library-item.is-added .library-item-muscles {
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(16, 23, 38, 0.72);
 }
 
 .library-item-action {
@@ -1629,12 +1635,12 @@
 
 .nav-btn.is-active {
   border-color: transparent;
-  background: var(--accent);
-  color: #ffffff;
+  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
+  color: var(--accent-on);
 }
 
 .theme-dark .nav-btn.is-active {
-  color: #141a27;
+  color: var(--accent-on);
 }
 
 button:focus-visible,
