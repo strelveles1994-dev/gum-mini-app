@@ -18,6 +18,10 @@ type TgUser = {
 type TgWebApp = {
   ready: () => void;
   expand: () => void;
+  requestFullscreen?: () => void;
+  disableVerticalSwipes?: () => void;
+  onEvent?: (eventType: string, callback: () => void) => void;
+  offEvent?: (eventType: string, callback: () => void) => void;
   colorScheme?: "light" | "dark";
   initDataUnsafe?: { user?: TgUser };
   HapticFeedback?: {
@@ -36,6 +40,7 @@ type CustomLibraryFilter = "all" | BasePlanId;
 type AppScreen = "home" | "workout" | "progress";
 type IconName = DayPlanId | "home" | "progress" | "add" | "core";
 type MeasurementIconName = "date" | "height" | "weight" | "waist";
+type ThemeMode = "auto" | "light" | "dark";
 
 type DayPlan = {
   id: DayPlanId;
@@ -128,6 +133,7 @@ const STORAGE_KEY = "gym-check-session-v7";
 const PROFILE_STORAGE_KEY = "gym-check-profile-v3";
 const CUSTOM_PROGRAMS_KEY = "gym-check-custom-programs-v1";
 const WORKOUT_LOGS_KEY = "gym-check-workout-logs-v1";
+const THEME_MODE_KEY = "gym-check-theme-mode-v1";
 const DEFAULT_REST_SECONDS = 90;
 
 const customFilterOptions: { id: CustomLibraryFilter; label: string }[] = [
@@ -468,6 +474,19 @@ function loadWorkoutLogs(): WorkoutLog[] {
   }
 }
 
+function loadThemeMode(): ThemeMode {
+  try {
+    const raw = localStorage.getItem(THEME_MODE_KEY);
+    if (raw === "auto" || raw === "light" || raw === "dark") {
+      return raw;
+    }
+  } catch {
+    // no-op
+  }
+
+  return "auto";
+}
+
 function formatDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -716,7 +735,11 @@ export default function App() {
   const tg = useMemo(() => window.Telegram?.WebApp, []);
   const userName = tg?.initDataUnsafe?.user?.first_name?.trim() || "Спортсмен";
   const userPhoto = tg?.initDataUnsafe?.user?.photo_url ?? "";
-  const isDark = tg?.colorScheme === "dark";
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
+  const [telegramColorScheme, setTelegramColorScheme] = useState<"light" | "dark">(() =>
+    tg?.colorScheme === "dark" ? "dark" : "light",
+  );
+  const isDark = themeMode === "auto" ? telegramColorScheme === "dark" : themeMode === "dark";
 
   const [screen, setScreen] = useState<AppScreen>("home");
   const [selectedPlanId, setSelectedPlanId] = useState<DayPlanId>("upper");
@@ -945,9 +968,43 @@ export default function App() {
     };
   }, [workoutLogs]);
 
+  const themeModeLabel = themeMode === "auto" ? "Авто" : themeMode === "light" ? "День" : "Ночь";
+
+  const themeModeDescription =
+    themeMode === "auto"
+      ? "Тема: авто по Telegram"
+      : themeMode === "light"
+        ? "Тема: светлая"
+        : "Тема: темная";
+
   useEffect(() => {
     tg?.ready();
     tg?.expand();
+    tg?.disableVerticalSwipes?.();
+
+    if (typeof tg?.requestFullscreen === "function") {
+      const timerId = window.setTimeout(() => {
+        try {
+          tg.requestFullscreen?.();
+        } catch {
+          // ignore unsupported fullscreen call
+        }
+      }, 120);
+
+      return () => window.clearTimeout(timerId);
+    }
+  }, [tg]);
+
+  useEffect(() => {
+    if (!tg?.onEvent) return;
+
+    const handleThemeChange = () => {
+      setTelegramColorScheme(tg.colorScheme === "dark" ? "dark" : "light");
+    };
+
+    tg.onEvent("themeChanged", handleThemeChange);
+
+    return () => tg.offEvent?.("themeChanged", handleThemeChange);
   }, [tg]);
 
   useEffect(() => {
@@ -965,6 +1022,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(WORKOUT_LOGS_KEY, JSON.stringify(workoutLogs));
   }, [workoutLogs]);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_MODE_KEY, themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     if (!notice) return;
@@ -998,6 +1059,18 @@ export default function App() {
 
   function triggerImpact(style: "light" | "medium" | "heavy" | "rigid" | "soft" = "light") {
     tg?.HapticFeedback?.impactOccurred?.(style);
+  }
+
+  function cycleThemeMode() {
+    setThemeMode((prev) => {
+      const next = prev === "auto" ? "light" : prev === "light" ? "dark" : "auto";
+      const nextDescription =
+        next === "auto" ? "Тема: авто по Telegram" : next === "light" ? "Тема: светлая" : "Тема: темная";
+      setNotice(nextDescription);
+      return next;
+    });
+
+    triggerImpact("light");
   }
 
   function updateExercisesForPlan(planId: DayPlanId, updater: (prev: SessionExercise[]) => SessionExercise[]) {
@@ -1633,13 +1706,26 @@ export default function App() {
                 <p className="screen-subtitle">Привет, {userName}</p>
               </div>
 
-              <button type="button" className="avatar-btn" onClick={openProgress} aria-label="Открыть прогресс">
-                {userPhoto ? (
-                  <img src={userPhoto} alt={userName} className="avatar-img" />
-                ) : (
-                  <AppIcon name="progress" className="app-icon app-icon-md" />
-                )}
-              </button>
+              <div className="head-actions">
+                <button
+                  type="button"
+                  className={`theme-toggle-btn mode-${themeMode}`}
+                  onClick={cycleThemeMode}
+                  aria-label={`${themeModeDescription}. Нажми, чтобы переключить режим`}
+                  title={`${themeModeDescription}. Нажми, чтобы переключить режим`}
+                >
+                  <span className="theme-toggle-dot" aria-hidden="true" />
+                  <span>{themeModeLabel}</span>
+                </button>
+
+                <button type="button" className="avatar-btn" onClick={openProgress} aria-label="Открыть прогресс">
+                  {userPhoto ? (
+                    <img src={userPhoto} alt={userName} className="avatar-img" />
+                  ) : (
+                    <AppIcon name="progress" className="app-icon app-icon-md" />
+                  )}
+                </button>
+              </div>
             </header>
 
             <section className="home-calendar">
@@ -2056,13 +2142,26 @@ export default function App() {
                 <h2 className="screen-title-sm">{selectedPlan.title}</h2>
               </div>
 
-              <button type="button" className="avatar-btn" onClick={openProgress} aria-label="Открыть прогресс">
-                {userPhoto ? (
-                  <img src={userPhoto} alt={userName} className="avatar-img" />
-                ) : (
-                  <AppIcon name="progress" className="app-icon app-icon-md" />
-                )}
-              </button>
+              <div className="head-actions">
+                <button
+                  type="button"
+                  className={`theme-toggle-btn mode-${themeMode}`}
+                  onClick={cycleThemeMode}
+                  aria-label={`${themeModeDescription}. Нажми, чтобы переключить режим`}
+                  title={`${themeModeDescription}. Нажми, чтобы переключить режим`}
+                >
+                  <span className="theme-toggle-dot" aria-hidden="true" />
+                  <span>{themeModeLabel}</span>
+                </button>
+
+                <button type="button" className="avatar-btn" onClick={openProgress} aria-label="Открыть прогресс">
+                  {userPhoto ? (
+                    <img src={userPhoto} alt={userName} className="avatar-img" />
+                  ) : (
+                    <AppIcon name="progress" className="app-icon app-icon-md" />
+                  )}
+                </button>
+              </div>
             </header>
 
             <section className="mini-calendar" aria-label="Календарь недели">
@@ -2767,9 +2866,27 @@ export default function App() {
                 <h2 className="screen-title-sm">Статистика и упражнения</h2>
               </div>
 
-              <button type="button" className="icon-btn" onClick={() => openWorkout(selectedPlanId)} aria-label="Открыть тренировку">
-                <AppIcon name={selectedPlan.icon} className="app-icon app-icon-md" />
-              </button>
+              <div className="head-actions">
+                <button
+                  type="button"
+                  className={`theme-toggle-btn mode-${themeMode}`}
+                  onClick={cycleThemeMode}
+                  aria-label={`${themeModeDescription}. Нажми, чтобы переключить режим`}
+                  title={`${themeModeDescription}. Нажми, чтобы переключить режим`}
+                >
+                  <span className="theme-toggle-dot" aria-hidden="true" />
+                  <span>{themeModeLabel}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => openWorkout(selectedPlanId)}
+                  aria-label="Открыть тренировку"
+                >
+                  <AppIcon name={selectedPlan.icon} className="app-icon app-icon-md" />
+                </button>
+              </div>
             </header>
 
             <section className="profile-card">

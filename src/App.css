@@ -1,10 +1,13 @@
 ﻿
 .app-shell {
   min-height: 100dvh;
+  height: 100dvh;
+  width: 100%;
   background: var(--shell-bg);
   color: var(--text-main);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .theme-light {
@@ -53,10 +56,11 @@
   overflow-y: auto;
   display: grid;
   gap: 12px;
-  padding: calc(env(safe-area-inset-top) + 8px) 10px 10px;
-  max-width: 560px;
+  padding: calc(env(safe-area-inset-top) + 6px) 8px 8px;
+  max-width: none;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .screen-head {
@@ -68,6 +72,12 @@
 
 .screen-head-tight {
   gap: 8px;
+}
+
+.head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .head-copy {
@@ -119,6 +129,43 @@
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
+}
+
+.theme-toggle-btn {
+  min-height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-elevated);
+  color: var(--text-main);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.theme-toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone-lime);
+  flex-shrink: 0;
+}
+
+.theme-toggle-btn.mode-auto .theme-toggle-dot {
+  background: color-mix(in srgb, var(--tone-lime) 60%, var(--tone-pink));
+}
+
+.theme-toggle-btn.mode-light .theme-toggle-dot {
+  background: var(--tone-lime);
+}
+
+.theme-toggle-btn.mode-dark .theme-toggle-dot {
+  background: var(--tone-pink);
 }
 
 .avatar-img {
@@ -1610,10 +1657,10 @@
   border-top: 1px solid var(--panel-border);
   background: color-mix(in srgb, var(--panel-bg) 96%, transparent);
   backdrop-filter: blur(14px);
-  padding: 10px 12px calc(18px + env(safe-area-inset-bottom));
-  max-width: 560px;
+  padding: 8px 8px calc(14px + env(safe-area-inset-bottom));
+  max-width: none;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
