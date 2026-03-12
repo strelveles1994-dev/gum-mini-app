@@ -468,6 +468,24 @@ function formatDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function getTodayIsoDate(): string {
+  return formatDateKey(new Date());
+}
+
+function formatMeasurementDate(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return new Date().toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (isoMatch) {
+    return `${isoMatch[3]}.${isoMatch[2]}.${isoMatch[1]}`;
+  }
+
+  return trimmed.slice(0, 32);
+}
+
 function getWeekStart(date: Date): Date {
   const current = new Date(date);
   current.setHours(0, 0, 0, 0);
@@ -715,6 +733,7 @@ export default function App() {
   const [customExerciseInput, setCustomExerciseInput] = useState("");
   const [monthAnchor] = useState(() => new Date());
   const [isMeasurementsExpanded, setIsMeasurementsExpanded] = useState(false);
+  const [measurementDateInput, setMeasurementDateInput] = useState(() => getTodayIsoDate());
   const [selectedDateKey, setSelectedDateKey] = useState(() => formatDateKey(new Date()));
   const [expandedLibrarySections, setExpandedLibrarySections] = useState<BasePlanId[]>(() =>
     customLibrarySections.map((section) => section.id),
@@ -1502,6 +1521,11 @@ export default function App() {
     }));
   }
 
+  function startNewMeasurement() {
+    setIsMeasurementsExpanded(true);
+    setMeasurementDateInput(getTodayIsoDate());
+  }
+
   function addMeasurement() {
     if (
       !profile.height &&
@@ -1516,7 +1540,7 @@ export default function App() {
       return;
     }
 
-    const date = new Date().toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+    const date = formatMeasurementDate(measurementDateInput || getTodayIsoDate());
     const entry: MeasurementEntry = {
       id: createId(),
       date,
@@ -1534,6 +1558,7 @@ export default function App() {
       measurements: [entry, ...prev.measurements].slice(0, 40),
     }));
 
+    setMeasurementDateInput(getTodayIsoDate());
     setNotice("Замер сохранен");
     triggerImpact("medium");
   }
@@ -1603,7 +1628,7 @@ export default function App() {
                 <button
                   type="button"
                   className="measurements-add-btn"
-                  onClick={addMeasurement}
+                  onClick={startNewMeasurement}
                   aria-label="Добавить замер"
                 >
                   <AppIcon name="add" className="app-icon app-icon-sm" />
@@ -1644,6 +1669,14 @@ export default function App() {
               {isMeasurementsExpanded ? (
                 <div className="measurements-details action-drawer">
                   <div className="measurement-inputs-grid">
+                    <label>
+                      <span>Дата замера</span>
+                      <input
+                        type="date"
+                        value={measurementDateInput}
+                        onChange={(event) => setMeasurementDateInput(event.target.value)}
+                      />
+                    </label>
                     <label>
                       <span>Рост</span>
                       <input
@@ -1717,7 +1750,7 @@ export default function App() {
                   </div>
 
                   <button type="button" className="secondary-btn" onClick={addMeasurement}>
-                    Сохранить замер
+                    Добавить новый замер
                   </button>
 
                   <div className="measurement-list">
