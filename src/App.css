@@ -19,6 +19,8 @@
   --accent-soft: #324366;
   --tone-lime: #b7ff33;
   --tone-pink: #ff4fa0;
+  --tone-lime-soft: #e9ffd0;
+  --tone-pink-soft: #ffe1f0;
   --accent-on: #101726;
   --success: #22c7a0;
   --notice-bg: #f2f5fa;
@@ -37,6 +39,8 @@
   --accent-soft: #d7dff0;
   --tone-lime: #b7ff33;
   --tone-pink: #ff4fa0;
+  --tone-lime-soft: color-mix(in srgb, var(--tone-lime) 24%, var(--panel-elevated));
+  --tone-pink-soft: color-mix(in srgb, var(--tone-pink) 26%, var(--panel-elevated));
   --accent-on: #101726;
   --success: #38d8b4;
   --notice-bg: #202a3a;
@@ -79,7 +83,7 @@
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--tone-pink) 78%, var(--text-sub));
+  color: color-mix(in srgb, var(--tone-pink) 84%, var(--text-sub));
 }
 
 .screen-title {
@@ -240,14 +244,15 @@
 }
 
 .home-calendar-day.has-workout {
-  background: color-mix(in srgb, var(--tone-lime) 26%, var(--input-bg));
+  background: var(--tone-lime-soft);
+  border: 1px solid color-mix(in srgb, var(--tone-lime) 52%, var(--panel-border));
 }
 
 .home-calendar-day.has-workout i {
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: var(--tone-lime);
+  background: var(--tone-pink);
   position: absolute;
   bottom: 2px;
 }
@@ -262,8 +267,8 @@
 }
 
 .primary-btn {
-  border: 0;
-  background: linear-gradient(118deg, var(--tone-lime), var(--tone-pink));
+  border: 1px solid color-mix(in srgb, var(--tone-pink) 38%, var(--tone-lime));
+  background: var(--tone-lime);
   color: var(--accent-on);
   display: inline-flex;
   align-items: center;
@@ -274,11 +279,14 @@
 
 .theme-dark .primary-btn {
   color: var(--accent-on);
-  background: linear-gradient(118deg, var(--tone-lime), var(--tone-pink));
+  background: var(--tone-lime);
 }
 
 .primary-btn.is-open {
-  opacity: 0.88;
+  border-color: color-mix(in srgb, var(--tone-pink) 70%, #ffffff);
+  background: var(--tone-pink);
+  color: #ffffff;
+  opacity: 1;
 }
 
 .primary-btn-label {
@@ -317,15 +325,16 @@
   height: 28px;
   border: 0;
   border-radius: 8px;
-  background: linear-gradient(118deg, var(--tone-lime), var(--tone-pink));
-  color: var(--accent-on);
+  border: 1px solid color-mix(in srgb, var(--tone-pink) 65%, var(--panel-border));
+  background: var(--tone-pink);
+  color: #ffffff;
   font-size: 1.08rem;
   line-height: 1;
   cursor: pointer;
 }
 
 .theme-dark .mini-plus-btn {
-  color: #111726;
+  color: #ffffff;
 }
 
 .plan-option {
@@ -573,8 +582,8 @@
 }
 
 .calendar-day.is-active {
-  border-color: transparent;
-  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
+  border-color: color-mix(in srgb, var(--tone-lime) 58%, var(--panel-border));
+  background: var(--tone-lime);
   color: var(--accent-on);
 }
 
@@ -642,13 +651,13 @@
 }
 
 .action-btn.is-active {
-  border-color: transparent;
-  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
-  color: var(--accent-on);
+  border-color: color-mix(in srgb, var(--tone-pink) 55%, var(--panel-border));
+  background: var(--tone-pink-soft);
+  color: var(--text-main);
 }
 
 .theme-dark .action-btn.is-active {
-  color: var(--accent-on);
+  color: var(--text-main);
 }
 
 .action-hint {
@@ -675,7 +684,7 @@
 }
 
 .action-btn.is-active .action-hint {
-  color: rgba(16, 23, 38, 0.74);
+  color: color-mix(in srgb, var(--tone-pink) 70%, var(--text-sub));
 }
 
 .action-btn-save {
@@ -822,13 +831,13 @@
 }
 
 .builder-filter-btn.is-active {
-  border-color: transparent;
-  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
-  color: var(--accent-on);
+  border-color: color-mix(in srgb, var(--tone-pink) 55%, var(--panel-border));
+  background: var(--tone-pink-soft);
+  color: var(--text-main);
 }
 
 .theme-dark .builder-filter-btn.is-active {
-  color: var(--accent-on);
+  color: var(--text-main);
 }
 
 .builder-library {
@@ -921,8 +930,8 @@
 }
 
 .library-item.is-added {
-  border-color: transparent;
-  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
+  border-color: color-mix(in srgb, var(--tone-lime) 60%, var(--panel-border));
+  background: var(--tone-lime-soft);
   color: var(--accent-on);
 }
 
@@ -959,7 +968,7 @@
 }
 
 .library-item.is-added .library-item-muscles {
-  color: rgba(16, 23, 38, 0.72);
+  color: color-mix(in srgb, var(--tone-pink) 42%, #1a2233);
 }
 
 .library-item-action {
@@ -1634,8 +1643,8 @@
 }
 
 .nav-btn.is-active {
-  border-color: transparent;
-  background: linear-gradient(120deg, var(--tone-lime), var(--tone-pink));
+  border-color: color-mix(in srgb, var(--tone-lime) 62%, var(--panel-border));
+  background: var(--tone-lime);
   color: var(--accent-on);
 }
 
